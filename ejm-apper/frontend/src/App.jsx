@@ -1,122 +1,97 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import axios from "axios";
+import Map, { Marker } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const MAPBOX_TOKEN =
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+export default function App() {
+  const [zip, setZip] = useState("");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const search = async () => {
+    if (!zip || zip.length !== 5) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get(`http://127.0.0.1:8000/api/neighborhood/${zip}`);
+      setData(res.data);
+    } catch (e) {
+      setError("Could not load data for that zip code. Try again.");
+    }
+    setLoading(false);
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
+    <div style={{ fontFamily: "sans-serif", maxWidth: 800, margin: "0 auto", padding: 24 }}>
+      <h1 style={{ fontSize: 28, marginBottom: 4 }}>EJMapper</h1>
+      <p style={{ color: "#666", marginBottom: 24 }}>
+        Environmental justice by zip code
+      </p>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+        <input
+          value={zip}
+          onChange={e => setZip(e.target.value)}
+          placeholder="Enter zip code"
+          maxLength={5}
+          style={{ padding: "10px 14px", fontSize: 16, border: "1px solid #ddd", borderRadius: 8, width: 200 }}
+        />
         <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+          onClick={search}
+          disabled={loading}
+          style={{ padding: "10px 20px", fontSize: 16, background: "#2563eb", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
         >
-          Count is {count}
+          {loading ? "Loading..." : "Search"}
         </button>
-      </section>
+      </div>
 
-      <div className="ticks"></div>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {data && (
+        <div>
+          <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+            <h2 style={{ marginBottom: 8 }}>Zip code {data.zip_code}</h2>
+            <p style={{ fontSize: 32, fontWeight: "bold", margin: "8px 0" }}>
+              Score: {data.report_card?.score ?? "—"}/100
+            </p>
+            <p style={{ fontSize: 20, marginBottom: 12 }}>
+              Grade: {data.report_card?.grade ?? "—"}
+            </p>
+            <p style={{ color: "#444", lineHeight: 1.6 }}>{data.report_card?.summary}</p>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ marginBottom: 12 }}>Key findings</h3>
+            {data.report_card?.key_findings?.map((f, i) => (
+              <div key={i} style={{ padding: "10px 14px", background: "#fafafa", border: "1px solid #eee", borderRadius: 8, marginBottom: 8 }}>
+                {f}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ marginBottom: 12 }}>What you can do</h3>
+            {data.report_card?.action_items?.map((a, i) => (
+              <div key={i} style={{ padding: "10px 14px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, marginBottom: 8 }}>
+                {a}
+              </div>
+            ))}
+          </div>
+
+          <Map
+            initialViewState={{ longitude: data.location.lon, latitude: data.location.lat, zoom: 12 }}
+            style={{ width: "100%", height: 400, borderRadius: 12 }}
+            mapStyle="mapbox://styles/mapbox/streets-v12"
+            mapboxAccessToken={MAPBOX_TOKEN}
+          >
+            <Marker longitude={data.location.lon} latitude={data.location.lat} color="red" />
+          </Map>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      )}
+    </div>
+  );
 }
-
-export default App
