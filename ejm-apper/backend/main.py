@@ -13,6 +13,7 @@ Start:
 """
 
 import asyncio
+import logging
 import os
 
 import httpx
@@ -23,6 +24,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from census_api import zip_to_latlon
 from ejscreen_api import get_ejscreen_data
+from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
+from mock_data import generate_mock_ejscreen
+
+logger = logging.getLogger("ejmapper")
 
 load_dotenv()
 
@@ -66,17 +71,20 @@ async def neighborhood(zip_code: str, radius: float = 1.0):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Step 2: Call all data APIs at the same time (not one after another)
-    # asyncio.gather() fires all requests in parallel — total time = slowest call,
-    # not the sum of all calls. Without this, users wait 8–10 seconds.
+    # Step 2: Fetch EJScreen data. If the EPA API is unreachable/timing out/erroring
+    # (it goes down periodically), transparently fall back to mock data so the app
+    # keeps working end-to-end. Real data resumes automatically once EPA recovers.
+    data_source = "live"
     try:
         ejscreen_data = await get_ejscreen_data(lat, lon, radius_miles=radius)
     except ValueError as e:
+        # Coordinates resolved but EJScreen genuinely has no coverage there.
         raise HTTPException(status_code=404, detail=str(e))
-    except httpx.HTTPStatusError:
-        raise HTTPException(status_code=502, detail="EPA EJScreen API error — try again.")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="EPA server timed out — try again.")
+    except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("EJScreen unavailable (%s) — serving mock data for %s",
+                       type(e).__name__, zip_code)
+        ejscreen_data = generate_mock_ejscreen(lat, lon, zip_code, radius_miles=radius)
+        data_source = "mock"
 
     # Step 3: Generate AI report card using Claude
     report_card = await generate_report_card(
@@ -96,6 +104,41 @@ async def neighborhood(zip_code: str, radius: float = 1.0):
         "percentiles":   ejscreen_data["percentiles"],
         "demographic":   ejscreen_data["demographic"],
         "report_card":   report_card,
+        "data_source":   data_source,   # "live" = real EJScreen, "mock" = fallback
+    }
+
+
+# ── Map layers route (heatmap + facilities + green space as GeoJSON) ──────────
+
+@app.get("/api/map-layers/{zip_code}")
+async def map_layers(zip_code: str, intensity: float = 60.0, radius: float = 1.5):
+    """
+    Return the three Mapbox overlays for a zip code as GeoJSON:
+      - air_quality:  weighted heatmap point cloud (intensity = air pollution
+                      percentile 0–100; pass the value from /api/neighborhood)
+      - facilities:   regulated facility markers (EPA ECHO, mock fallback)
+      - green_spaces: park/green polygons (OSM Overpass, mock fallback)
+
+    Facilities and green spaces are fetched in parallel.
+    """
+    if not zip_code.isdigit() or len(zip_code) != 5:
+        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+
+    try:
+        lat, lon = await zip_to_latlon(zip_code)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    facilities, green_spaces = await asyncio.gather(
+        facilities_geojson(lat, lon, radius_miles=radius),
+        green_space_geojson(lat, lon, radius_miles=radius),
+    )
+
+    return {
+        "center": {"lat": lat, "lon": lon},
+        "air_quality": air_quality_geojson(lat, lon, intensity=intensity),
+        "facilities": facilities,
+        "green_spaces": green_spaces,
     }
 
 
@@ -107,13 +150,16 @@ async def ejscreen_endpoint(lat: float, lon: float, radius: float = 1.0):
     try:
         data = await get_ejscreen_data(lat, lon, radius_miles=radius)
         data.pop("_raw", None)
+        data["data_source"] = "live"
         return data
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except httpx.HTTPStatusError:
-        raise HTTPException(status_code=502, detail="EPA API error")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="EPA server timed out")
+    except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("EJScreen unavailable (%s) — serving mock data for (%s, %s)",
+                       type(e).__name__, lat, lon)
+        data = generate_mock_ejscreen(lat, lon, zip_code=None, radius_miles=radius)
+        data["data_source"] = "mock"
+        return data
 
 
 # ── Claude report card generator ─────────────────────────────────────────────

@@ -1,95 +1,359 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import Map, { Marker } from "react-map-gl";
+import Map, { Marker, Source, Layer } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import "./App.css";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const API_BASE = "http://127.0.0.1:8000";
+
+// The 12 EJScreen indicators, in display order. Each pairs the raw value key
+// (from `environmental`) with its national-percentile key (from `percentiles`).
+// `pct: true` means the raw value is a 0–1 fraction shown as a percentage.
+const INDICATORS = [
+  { env: "pm25_avg_ugm3",             pctl: "pm25_pctile_national",        label: "Fine particles (PM2.5)",   unit: "µg/m³" },
+  { env: "ozone_ppb",                 pctl: "ozone_pctile_national",       label: "Ozone",                    unit: "ppb" },
+  { env: "diesel_pm_ugm3",            pctl: "diesel_pm_pctile_national",   label: "Diesel exhaust",           unit: "µg/m³" },
+  { env: "air_toxics_cancer_risk",    pctl: "cancer_risk_pctile_national", label: "Air toxics cancer risk",   unit: "per million" },
+  { env: "air_toxics_resp_hazard",    pctl: "resp_hazard_pctile_national", label: "Respiratory hazard",       unit: "index" },
+  { env: "traffic_proximity",         pctl: "traffic_pctile_national",     label: "Traffic proximity",        unit: "vehicles/m" },
+  { env: "lead_paint_pct",            pctl: "lead_paint_pctile_national",  label: "Lead paint (pre-1960 homes)", unit: "", pct: true },
+  { env: "superfund_proximity",       pctl: "superfund_pctile_national",   label: "Superfund sites",          unit: "per km²" },
+  { env: "rmp_facility_proximity",    pctl: "rmp_pctile_national",         label: "Risk-management facilities", unit: "per km²" },
+  { env: "hazwaste_proximity",        pctl: "hazwaste_pctile_national",    label: "Hazardous waste sites",    unit: "per km²" },
+  { env: "underground_storage_tanks", pctl: "ust_pctile_national",         label: "Underground storage tanks", unit: "per km²" },
+  { env: "wastewater_discharge",      pctl: "wastewater_pctile_national",  label: "Wastewater discharge",     unit: "index" },
+];
+
+// Map a 0–100 burden value (higher = worse) to a severity color + background.
+function severity(value) {
+  if (value == null) return { color: "#9ca3af", bg: "#f3f4f6" };
+  if (value < 50)  return { color: "var(--good)",     bg: "var(--good-bg)" };
+  if (value < 75)  return { color: "var(--moderate)", bg: "var(--moderate-bg)" };
+  if (value < 90)  return { color: "var(--elevated)", bg: "var(--elevated-bg)" };
+  return { color: "var(--severe)", bg: "var(--severe-bg)" };
+}
+
+function fmt(value, isPct) {
+  if (value == null) return "—";
+  if (isPct) return `${Math.round(value * 100)}%`;
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
+// ── Mapbox layer style definitions ──────────────────────────────────────────
+const heatmapLayer = {
+  id: "air-quality-heat",
+  type: "heatmap",
+  paint: {
+    "heatmap-weight": ["get", "weight"],
+    "heatmap-intensity": 1.1,
+    "heatmap-radius": 34,
+    "heatmap-opacity": 0.75,
+    "heatmap-color": [
+      "interpolate", ["linear"], ["heatmap-density"],
+      0, "rgba(0,0,0,0)",
+      0.2, "#a7f3d0",
+      0.4, "#fde047",
+      0.6, "#fb923c",
+      0.8, "#ef4444",
+      1, "#b91c1c",
+    ],
+  },
+};
+
+const facilitiesLayer = {
+  id: "facilities-circle",
+  type: "circle",
+  paint: {
+    "circle-radius": 7,
+    "circle-color": [
+      "match", ["get", "type"],
+      "Recent violation", "#dc2626",
+      "#7c3aed",
+    ],
+    "circle-stroke-width": 2,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 0.9,
+  },
+};
+
+const greenFillLayer = {
+  id: "green-fill",
+  type: "fill",
+  paint: { "fill-color": "#16a34a", "fill-opacity": 0.35 },
+};
+
+const greenLineLayer = {
+  id: "green-line",
+  type: "line",
+  paint: { "line-color": "#15803d", "line-width": 1.5 },
+};
+
+// Average the three air-pollution percentiles to drive heatmap intensity.
+function airIntensity(percentiles) {
+  const vals = [
+    percentiles?.pm25_pctile_national,
+    percentiles?.ozone_pctile_national,
+    percentiles?.diesel_pm_pctile_national,
+  ].filter((v) => v != null);
+  if (!vals.length) return 60;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
 
 export default function App() {
   const [zip, setZip] = useState("");
   const [data, setData] = useState(null);
+  const [layers, setLayers] = useState(null);
+  const [visible, setVisible] = useState({ air: true, facilities: true, parks: true });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const search = async () => {
-    if (!zip || zip.length !== 5) return;
+  const toggle = (key) => setVisible((v) => ({ ...v, [key]: !v[key] }));
+
+  const search = async (zipArg, { pushUrl = true } = {}) => {
+    const z = (zipArg ?? zip).toString();
+    if (!z || z.length !== 5) {
+      setError("Please enter a 5-digit zip code.");
+      return;
+    }
+    setZip(z);
     setLoading(true);
     setError(null);
+    setData(null);
+    setLayers(null);
+    // Reflect the searched zip in the URL so the link is shareable / bookmarkable.
+    if (pushUrl && window.location.pathname !== `/${z}`) {
+      window.history.pushState({ zip: z }, "", `/${z}`);
+    }
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/neighborhood/${zip}`);
+      const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`);
       setData(res.data);
+      // Fetch map overlays in the background — don't block the report card on them.
+      const intensity = airIntensity(res.data.percentiles);
+      axios
+        .get(`${API_BASE}/api/map-layers/${z}`, { params: { intensity } })
+        .then((r) => setLayers(r.data))
+        .catch(() => setLayers(null));
     } catch (e) {
-      setError("Could not load data for that zip code. Try again.");
+      setError(
+        e.response?.data?.detail ||
+          "Could not load data for that zip code. Please try again."
+      );
     }
     setLoading(false);
   };
 
-  return (
-    <div style={{ fontFamily: "sans-serif", maxWidth: 800, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 28, marginBottom: 4 }}>EJMapper</h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>
-        Environmental justice by zip code
-      </p>
+  // On first load (and on browser back/forward), read a zip from the URL path
+  // like /78207 and auto-run that search so shared links open straight to the report.
+  useEffect(() => {
+    const loadFromUrl = () => {
+      const m = window.location.pathname.match(/^\/(\d{5})$/);
+      if (m) search(m[1], { pushUrl: false });
+    };
+    loadFromUrl();
+    window.addEventListener("popstate", loadFromUrl);
+    return () => window.removeEventListener("popstate", loadFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+  const onKey = (e) => e.key === "Enter" && search();
+
+  const rc = data?.report_card;
+  const sev = severity(rc?.score);
+
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>EJMapper</h1>
+        <p className="tagline">Environmental justice by zip code</p>
+      </header>
+
+      <div className="search">
         <input
           value={zip}
-          onChange={e => setZip(e.target.value)}
-          placeholder="Enter zip code"
+          onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+          onKeyDown={onKey}
+          placeholder="Enter a 5-digit zip code"
+          inputMode="numeric"
           maxLength={5}
-          style={{ padding: "10px 14px", fontSize: 16, border: "1px solid #ddd", borderRadius: 8, width: 200 }}
         />
-        <button
-          onClick={search}
-          disabled={loading}
-          style={{ padding: "10px 20px", fontSize: 16, background: "#2563eb", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
-        >
-          {loading ? "Loading..." : "Search"}
+        <button onClick={() => search()} disabled={loading}>
+          {loading ? "Loading…" : "Search"}
         </button>
       </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <div className="banner error">{error}</div>}
 
-      {data && (
-        <div>
-          <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: 20, marginBottom: 24 }}>
-            <h2 style={{ marginBottom: 8 }}>Zip code {data.zip_code}</h2>
-            <p style={{ fontSize: 32, fontWeight: "bold", margin: "8px 0" }}>
-              Score: {data.report_card?.score ?? "—"}/100
-            </p>
-            <p style={{ fontSize: 20, marginBottom: 12 }}>
-              Grade: {data.report_card?.grade ?? "—"}
-            </p>
-            <p style={{ color: "#444", lineHeight: 1.6 }}>{data.report_card?.summary}</p>
-          </div>
-
-          <div style={{ marginBottom: 24 }}>
-            <h3 style={{ marginBottom: 12 }}>Key findings</h3>
-            {data.report_card?.key_findings?.map((f, i) => (
-              <div key={i} style={{ padding: "10px 14px", background: "#fafafa", border: "1px solid #eee", borderRadius: 8, marginBottom: 8 }}>
-                {f}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginBottom: 24 }}>
-            <h3 style={{ marginBottom: 12 }}>What you can do</h3>
-            {data.report_card?.action_items?.map((a, i) => (
-              <div key={i} style={{ padding: "10px 14px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, marginBottom: 8 }}>
-                {a}
-              </div>
-            ))}
-          </div>
-
-          <Map
-            initialViewState={{ longitude: data.location.lon, latitude: data.location.lat, zoom: 12 }}
-            style={{ width: "100%", height: 400, borderRadius: 12 }}
-            mapStyle="mapbox://styles/mapbox/streets-v12"
-            mapboxAccessToken={MAPBOX_TOKEN}
-          >
-            <Marker longitude={data.location.lon} latitude={data.location.lat} color="red" />
-          </Map>
+      {loading && (
+        <div className="loading">
+          <div className="spinner" />
+          <span>Gathering environmental data and writing your report card…</span>
         </div>
+      )}
+
+      {data && !loading && (
+        <>
+          {data.data_source === "mock" && (
+            <div className="banner mock">
+              Showing estimated data — the EPA EJScreen service is temporarily offline.
+            </div>
+          )}
+
+          {/* Score hero */}
+          <div
+            className="score-card"
+            style={{ "--sev-color": sev.color, "--sev-bg": sev.bg }}
+          >
+            <div className="score-dial">
+              <span className="num">{rc?.score ?? "—"}</span>
+              <span className="out-of">out of 100</span>
+            </div>
+            <div className="score-body">
+              <div className="zip-line">
+                <h2>Zip code {data.zip_code}</h2>
+                {rc?.grade && <span className="grade-pill">Grade {rc.grade}</span>}
+              </div>
+              <p className="summary">{rc?.summary}</p>
+            </div>
+          </div>
+
+          {/* Indicator cards */}
+          <div className="section">
+            <h3>Environmental indicators</h3>
+            <div className="indicator-grid">
+              {INDICATORS.map((ind) => {
+                const raw = data.environmental?.[ind.env];
+                const pctl = data.percentiles?.[ind.pctl];
+                const s = severity(pctl);
+                return (
+                  <div className="indicator" key={ind.env}>
+                    <div className="label">{ind.label}</div>
+                    <div className="value">
+                      {fmt(raw, ind.pct)}
+                      {ind.unit && <span className="unit">{ind.unit}</span>}
+                    </div>
+                    <div className="bar">
+                      <span
+                        style={{
+                          width: `${pctl ?? 0}%`,
+                          background: s.color,
+                        }}
+                      />
+                    </div>
+                    <div className="pctile">
+                      {pctl != null ? (
+                        <>Worse than <b>{Math.round(pctl)}%</b> of the US</>
+                      ) : (
+                        "No data"
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Key findings */}
+          {rc?.key_findings?.length > 0 && (
+            <div className="section">
+              <h3>Key findings</h3>
+              {rc.key_findings.map((f, i) => (
+                <div className="list-item" key={i}>{f}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Action items */}
+          {rc?.action_items?.length > 0 && (
+            <div className="section">
+              <h3>What you can do</h3>
+              {rc.action_items.map((a, i) => (
+                <div className="list-item action" key={i}>{a}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Map with toggleable layers */}
+          {data.location && (
+            <div className="section">
+              <h3>Map &amp; layers</h3>
+
+              <div className="layer-toggles">
+                <button
+                  className={`chip air ${visible.air ? "on" : ""}`}
+                  onClick={() => toggle("air")}
+                >
+                  <span className="swatch" /> Air quality heatmap
+                </button>
+                <button
+                  className={`chip fac ${visible.facilities ? "on" : ""}`}
+                  onClick={() => toggle("facilities")}
+                >
+                  <span className="swatch" /> Industrial facilities
+                  {layers && ` (${layers.facilities.features.length})`}
+                </button>
+                <button
+                  className={`chip park ${visible.parks ? "on" : ""}`}
+                  onClick={() => toggle("parks")}
+                >
+                  <span className="swatch" /> Green spaces
+                  {layers && ` (${layers.green_spaces.features.length})`}
+                </button>
+              </div>
+
+              <div className="map-wrap">
+                <Map
+                  initialViewState={{
+                    longitude: data.location.lon,
+                    latitude: data.location.lat,
+                    zoom: 12.5,
+                  }}
+                  style={{ width: "100%", height: 440 }}
+                  mapStyle="mapbox://styles/mapbox/light-v11"
+                  mapboxAccessToken={MAPBOX_TOKEN}
+                >
+                  {/* Green spaces (drawn first, underneath) */}
+                  {layers && visible.parks && (
+                    <Source id="green" type="geojson" data={layers.green_spaces}>
+                      <Layer {...greenFillLayer} />
+                      <Layer {...greenLineLayer} />
+                    </Source>
+                  )}
+
+                  {/* Air-quality heatmap */}
+                  {layers && visible.air && (
+                    <Source id="air" type="geojson" data={layers.air_quality}>
+                      <Layer {...heatmapLayer} />
+                    </Source>
+                  )}
+
+                  {/* Industrial facility markers */}
+                  {layers && visible.facilities && (
+                    <Source id="facilities" type="geojson" data={layers.facilities}>
+                      <Layer {...facilitiesLayer} />
+                    </Source>
+                  )}
+
+                  {/* Searched location pin */}
+                  <Marker
+                    longitude={data.location.lon}
+                    latitude={data.location.lat}
+                    color={sev.color === "var(--good)" ? "#16a34a" : "#dc2626"}
+                  />
+                </Map>
+              </div>
+
+              {layers &&
+                (layers.facilities.source === "mock" ||
+                  layers.green_spaces.source === "mock") && (
+                  <p className="map-note">
+                    Some map layers show estimated locations while the EPA and
+                    OpenStreetMap services are unavailable.
+                  </p>
+                )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
