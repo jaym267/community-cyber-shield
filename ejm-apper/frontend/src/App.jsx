@@ -5,7 +5,9 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "./App.css";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-const API_BASE = "http://127.0.0.1:8000";
+// API base: set VITE_API_BASE to the deployed backend URL in production;
+// falls back to the local FastAPI dev server otherwise.
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
 // The 12 EJScreen indicators, in display order. Each pairs the raw value key
 // (from `environmental`) with its national-percentile key (from `percentiles`).

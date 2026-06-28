@@ -1,0 +1,22 @@
+# Render Blueprint for the EJMapper FastAPI backend.
+# Deploy: in Render, New → Blueprint → connect this repo. Render reads this file.
+# Set the secret env vars (ANTHROPIC_API_KEY, ALLOWED_ORIGINS) in the dashboard.
+services:
+  - type: web
+    name: ejmapper-api
+    runtime: python
+    rootDir: ejm-apper/backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Render injects $PORT; bind to 0.0.0.0 so it's reachable.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # Your Anthropic key — set the value in the Render dashboard (never commit it).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Comma-separated production frontend origins, e.g. your Vercel URL.
+      # *.vercel.app is already allowed by regex in main.py, so this is only
+      # needed for custom domains.
+      - key: ALLOWED_ORIGINS
+        sync: false

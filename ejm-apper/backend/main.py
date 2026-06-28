@@ -33,10 +33,16 @@ load_dotenv()
 
 app = FastAPI(title="EJMapper API", version="0.1.0")
 
-# Allow the React dev server to call this API
+# CORS: allow the local dev servers plus any production origins supplied via the
+# ALLOWED_ORIGINS env var (comma-separated). Vercel preview/prod domains
+# (*.vercel.app) are matched by regex so preview deploys work without config.
+_DEFAULT_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
+_ENV_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=_DEFAULT_ORIGINS + _ENV_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
