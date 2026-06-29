@@ -29,7 +29,7 @@ const INDICATORS = [
 
 // Map a 0–100 burden value (higher = worse) to a severity color + background.
 function severity(value) {
-  if (value == null) return { color: "#9ca3af", bg: "#f3f4f6" };
+  if (value == null) return { color: "#9a8f7a", bg: "#efe9da" };
   if (value < 50)  return { color: "var(--good)",     bg: "var(--good-bg)" };
   if (value < 75)  return { color: "var(--moderate)", bg: "var(--moderate-bg)" };
   if (value < 90)  return { color: "var(--elevated)", bg: "var(--elevated-bg)" };
@@ -42,14 +42,14 @@ function fmt(value, isPct) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
 
-// Grade key — what each letter means, worst-to-best is F→A. The card highlights
-// whichever grade the report card returned.
+// Grade key — what each letter means, worst-to-best is A→F, rendered as a
+// single gradient scale bar with the current grade marked on it.
 const GRADE_KEY = [
-  { letter: "A", color: "#16a34a", label: "Clean", desc: "Minimal environmental burden" },
-  { letter: "B", color: "#65a30d", label: "Low",   desc: "Below-average burden" },
-  { letter: "C", color: "#ca8a04", label: "Moderate", desc: "Around the national average" },
-  { letter: "D", color: "#ea580c", label: "High",  desc: "Above-average burden" },
-  { letter: "F", color: "#dc2626", label: "Severe", desc: "Among the most burdened areas" },
+  { letter: "A", color: "#3f6b34", label: "Clean", desc: "Minimal environmental burden" },
+  { letter: "B", color: "#6b8f3f", label: "Low",   desc: "Below-average burden" },
+  { letter: "C", color: "#b08a1f", label: "Moderate", desc: "Around the national average" },
+  { letter: "D", color: "#c1672f", label: "High",  desc: "Above-average burden" },
+  { letter: "F", color: "#8c2f23", label: "Severe", desc: "Among the most burdened areas" },
 ];
 
 // ── Mapbox layer style definitions ──────────────────────────────────────────
@@ -64,11 +64,11 @@ const heatmapLayer = {
     "heatmap-color": [
       "interpolate", ["linear"], ["heatmap-density"],
       0, "rgba(0,0,0,0)",
-      0.2, "#a7f3d0",
-      0.4, "#fde047",
-      0.6, "#fb923c",
-      0.8, "#ef4444",
-      1, "#b91c1c",
+      0.2, "#d9c9a0",
+      0.4, "#cc9a3e",
+      0.6, "#c1672f",
+      0.8, "#9c3a26",
+      1, "#5e1a12",
     ],
   },
 };
@@ -80,11 +80,11 @@ const facilitiesLayer = {
     "circle-radius": 7,
     "circle-color": [
       "match", ["get", "type"],
-      "Recent violation", "#dc2626",
-      "#7c3aed",
+      "Recent violation", "#8c2f23",
+      "#3a3530",
     ],
     "circle-stroke-width": 2,
-    "circle-stroke-color": "#ffffff",
+    "circle-stroke-color": "#fffdf8",
     "circle-opacity": 0.9,
   },
 };
@@ -92,13 +92,13 @@ const facilitiesLayer = {
 const greenFillLayer = {
   id: "green-fill",
   type: "fill",
-  paint: { "fill-color": "#16a34a", "fill-opacity": 0.35 },
+  paint: { "fill-color": "#5c7a45", "fill-opacity": 0.3 },
 };
 
 const greenLineLayer = {
   id: "green-line",
   type: "line",
-  paint: { "line-color": "#15803d", "line-width": 1.5 },
+  paint: { "line-color": "#3f5b2e", "line-width": 1.5 },
 };
 
 // Average the three air-pollution percentiles to drive heatmap intensity.
@@ -173,10 +173,12 @@ export default function App() {
   const rc = data?.report_card;
   // Color the score dial by the report's letter grade (falling back to the
   // score-based severity scale if no grade was returned), so the dial, the
-  // grade pill, and the grade key all share one consistent color.
-  const gradeMeta = GRADE_KEY.find((g) => g.letter === rc?.grade);
+  // grade pill, and the grade scale all share one consistent color.
+  const gradeIndex = GRADE_KEY.findIndex((g) => g.letter === rc?.grade);
+  const gradeMeta = gradeIndex >= 0 ? GRADE_KEY[gradeIndex] : null;
   const dialColor = gradeMeta?.color || severity(rc?.score).color;
-  const dialBg = `color-mix(in srgb, ${dialColor} 12%, #fff)`;
+  const dialBg = `color-mix(in srgb, ${dialColor} 12%, var(--surface))`;
+  const gradeGradient = `linear-gradient(90deg, ${GRADE_KEY.map((g) => g.color).join(", ")})`;
 
   return (
     <div className="app">
@@ -209,7 +211,7 @@ export default function App() {
       )}
 
       {data && !loading && (
-        <>
+        <div className="report" key={data.zip_code}>
           {data.data_source === "mock" && (
             <div className="banner mock">
               Showing estimated data — the EPA EJScreen service is temporarily offline.
@@ -234,24 +236,44 @@ export default function App() {
             </div>
           </div>
 
-          {/* Grade key — explains what each letter means */}
+          {/* Grade key — a single gradient scale, A (clean) to F (severe),
+              with the current grade marked on it. */}
           <div className="grade-key">
             <span className="grade-key-title">What the grade means</span>
-            <div className="grade-key-row">
-              {GRADE_KEY.map((g) => (
-                <div
-                  key={g.letter}
-                  className={`grade-key-item ${rc?.grade === g.letter ? "active" : ""}`}
-                  style={{ "--g-color": g.color }}
-                >
-                  <span className="grade-key-letter">{g.letter}</span>
-                  <span className="grade-key-text">
-                    <b>{g.label}</b>
-                    <small>{g.desc}</small>
+            <div className="grade-scale">
+              <div
+                className="grade-scale-track"
+                style={{ background: gradeGradient }}
+              >
+                {gradeIndex >= 0 && (
+                  <span
+                    className="grade-scale-marker"
+                    style={{ left: `${(gradeIndex / (GRADE_KEY.length - 1)) * 100}%` }}
+                  >
+                    {rc.grade}
                   </span>
-                </div>
-              ))}
+                )}
+              </div>
+              <div className="grade-scale-ticks">
+                {GRADE_KEY.map((g) => (
+                  <span
+                    key={g.letter}
+                    className={`grade-scale-tick ${rc?.grade === g.letter ? "active" : ""}`}
+                  >
+                    {g.letter}
+                  </span>
+                ))}
+              </div>
             </div>
+            <p className="grade-key-legend">
+              {GRADE_KEY.map((g, i) => (
+                <span key={g.letter} className={rc?.grade === g.letter ? "active" : ""}>
+                  <b>{g.letter}</b> {g.label}
+                  {i < GRADE_KEY.length - 1 && " · "}
+                </span>
+              ))}
+            </p>
+            {gradeMeta && <p className="grade-key-desc">{gradeMeta.desc}.</p>}
           </div>
 
           {/* Indicator cards */}
@@ -390,7 +412,7 @@ export default function App() {
                 )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

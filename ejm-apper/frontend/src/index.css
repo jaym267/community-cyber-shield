@@ -1,34 +1,38 @@
 :root {
-  /* Neutrals */
-  --bg: #f4f6f6;
-  --surface: #ffffff;
-  --surface-2: #fafbfb;
-  --border: #e6e9ea;
-  --text: #131a1c;
-  --text-muted: #69767a;
+  /* Neutrals — warm parchment, not cold gray */
+  --bg: #f6f1e7;
+  --surface: #fffdf8;
+  --surface-2: #efe7d8;
+  --border: #ddd2ba;
+  --text: #211a12;
+  --text-muted: #7a6f5c;
 
-  /* Brand — deep teal, fitting an environmental app */
-  --brand: #0f766e;
-  --brand-dark: #0b5d56;
-  --brand-tint: rgba(15, 118, 110, 0.10);
+  /* Brand — burnt terracotta. Deliberately not blue/teal/indigo/purple. */
+  --brand: #b1502b;
+  --brand-dark: #8a3c1f;
+  --brand-tint: rgba(177, 80, 43, 0.14);
 
-  /* Score / severity scale (green = good, red = burdened) */
-  --good: #16a34a;
-  --good-bg: #ecfdf3;
-  --moderate: #ca8a04;
-  --moderate-bg: #fefce8;
-  --elevated: #ea580c;
-  --elevated-bg: #fff7ed;
-  --severe: #dc2626;
-  --severe-bg: #fef2f2;
+  /* Severity scale (A→F / good→severe) — single earth-tone family, stepping
+     through hue and lightness together so the gradient reads clearly even
+     without relying on red/green alone. */
+  --good: #4d7c3f;
+  --good-bg: #eef3e4;
+  --moderate: #b08a1f;
+  --moderate-bg: #f7eed9;
+  --elevated: #c1672f;
+  --elevated-bg: #f8e9da;
+  --severe: #8c2f23;
+  --severe-bg: #f3e1dd;
 
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.06);
-  --radius: 16px;
-  --radius-sm: 10px;
+  /* Flat, hairline-bordered shape language — no soft glow shadows */
+  --shadow-sm: 0 1px 0 rgba(33, 26, 18, 0.05);
+  --shadow: 0 1px 0 rgba(33, 26, 18, 0.07), 0 0 0 1px rgba(33, 26, 18, 0.03);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
 
-  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", serif;
+  font-family: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
