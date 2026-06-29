@@ -1,11 +1,16 @@
 :root {
-  --bg: #f6f7f9;
+  /* Neutrals */
+  --bg: #f4f6f6;
   --surface: #ffffff;
-  --border: #e6e8ec;
-  --text: #1f2530;
-  --text-muted: #6b7280;
-  --brand: #2563eb;
-  --brand-dark: #1d4ed8;
+  --surface-2: #fafbfb;
+  --border: #e6e9ea;
+  --text: #131a1c;
+  --text-muted: #69767a;
+
+  /* Brand — deep teal, fitting an environmental app */
+  --brand: #0f766e;
+  --brand-dark: #0b5d56;
+  --brand-tint: rgba(15, 118, 110, 0.10);
 
   /* Score / severity scale (green = good, red = burdened) */
   --good: #16a34a;
@@ -17,14 +22,18 @@
   --severe: #dc2626;
   --severe-bg: #fef2f2;
 
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.06);
-  --radius: 14px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 * {
