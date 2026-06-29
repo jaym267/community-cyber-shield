@@ -280,12 +280,12 @@ export default function App() {
           <div className="section">
             <h3>Environmental indicators</h3>
             <div className="indicator-grid">
-              {INDICATORS.map((ind) => {
+              {INDICATORS.map((ind, i) => {
                 const raw = data.environmental?.[ind.env];
                 const pctl = data.percentiles?.[ind.pctl];
                 const s = severity(pctl);
                 return (
-                  <div className="indicator" key={ind.env}>
+                  <div className="indicator" key={ind.env} style={{ "--i": i }}>
                     <div className="label">{ind.label}</div>
                     <div className="value">
                       {fmt(raw, ind.pct)}
