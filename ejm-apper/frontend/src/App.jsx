@@ -171,7 +171,12 @@ export default function App() {
   const onKey = (e) => e.key === "Enter" && search();
 
   const rc = data?.report_card;
-  const sev = severity(rc?.score);
+  // Color the score dial by the report's letter grade (falling back to the
+  // score-based severity scale if no grade was returned), so the dial, the
+  // grade pill, and the grade key all share one consistent color.
+  const gradeMeta = GRADE_KEY.find((g) => g.letter === rc?.grade);
+  const dialColor = gradeMeta?.color || severity(rc?.score).color;
+  const dialBg = `color-mix(in srgb, ${dialColor} 12%, #fff)`;
 
   return (
     <div className="app">
@@ -214,7 +219,7 @@ export default function App() {
           {/* Score hero */}
           <div
             className="score-card"
-            style={{ "--sev-color": sev.color, "--sev-bg": sev.bg }}
+            style={{ "--sev-color": dialColor, "--sev-bg": dialBg }}
           >
             <div className="score-dial">
               <span className="num">{rc?.score ?? "—"}</span>
@@ -370,7 +375,7 @@ export default function App() {
                   <Marker
                     longitude={data.location.lon}
                     latitude={data.location.lat}
-                    color={sev.color === "var(--good)" ? "#16a34a" : "#dc2626"}
+                    color={dialColor}
                   />
                 </Map>
               </div>
