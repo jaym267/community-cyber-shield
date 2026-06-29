@@ -29,7 +29,11 @@
   --shadow: 0 1px 0 rgba(33, 26, 18, 0.07), 0 0 0 1px rgba(33, 26, 18, 0.03);
   --radius: 10px;
   --radius-sm: 6px;
+  /* Hover/color-state transitions use --ease; entrances and press feedback
+     use the stronger --ease-out (built-in CSS easings are too weak to feel
+     intentional on elements that are appearing or being pressed). */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   --font-display: "Fraunces", "Iowan Old Style", serif;
   font-family: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

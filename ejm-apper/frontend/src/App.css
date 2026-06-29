@@ -64,14 +64,16 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.15s var(--ease), transform 0.05s var(--ease), box-shadow 0.15s var(--ease);
+  transition: background 0.15s var(--ease), transform 0.14s var(--ease-out), box-shadow 0.15s var(--ease);
   white-space: nowrap;
 }
-.search button:hover:not(:disabled) {
-  background: var(--brand-dark);
+@media (hover: hover) and (pointer: fine) {
+  .search button:hover:not(:disabled) {
+    background: var(--brand-dark);
+  }
 }
 .search button:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.97);
 }
 .search button:disabled {
   opacity: 0.55;
@@ -130,7 +132,7 @@
 
 /* ── Report entrance ─────────────────────────────────────────────────────── */
 .report {
-  animation: fadeUp 0.32s var(--ease) both;
+  animation: fadeUp 0.26s var(--ease-out) both;
 }
 @keyframes fadeUp {
   from {
@@ -140,6 +142,19 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report {
+    animation: fadeIn 0.2s ease both;
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 
@@ -321,9 +336,11 @@
   box-shadow: var(--shadow-sm);
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
-.indicator:hover {
-  border-color: var(--brand);
-  box-shadow: var(--shadow);
+@media (hover: hover) and (pointer: fine) {
+  .indicator:hover {
+    border-color: var(--brand);
+    box-shadow: var(--shadow);
+  }
 }
 .indicator .label {
   font-size: 12.5px;
@@ -383,8 +400,10 @@
   box-shadow: var(--shadow-sm);
   transition: border-color 0.15s var(--ease);
 }
-.list-item:hover {
-  border-color: #c9bb9a;
+@media (hover: hover) and (pointer: fine) {
+  .list-item:hover {
+    border-color: #c9bb9a;
+  }
 }
 .list-item.action {
   border-left: 3px solid var(--brand);
@@ -426,8 +445,10 @@
   transition: opacity 0.15s var(--ease), border-color 0.15s var(--ease);
   opacity: 0.65;
 }
-.chip:hover {
-  opacity: 0.85;
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    opacity: 0.85;
+  }
 }
 .chip.on {
   color: var(--text);
