@@ -170,6 +170,71 @@
   font-size: 15px;
 }
 
+/* ── Grade key / legend ──────────────────────────────────────────────────── */
+.grade-key {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+}
+.grade-key-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.grade-key-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.grade-key-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  transition: all 0.15s;
+}
+.grade-key-item.active {
+  border-color: var(--g-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--g-color) 25%, transparent);
+  background: color-mix(in srgb, var(--g-color) 8%, #fff);
+}
+.grade-key-letter {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
+  background: var(--g-color);
+}
+.grade-key-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.grade-key-text b {
+  font-size: 13px;
+  color: var(--text);
+}
+.grade-key-text small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ── Section headings ────────────────────────────────────────────────────── */
 .section {
   margin-bottom: 28px;

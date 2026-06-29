@@ -24,10 +24,13 @@ Install deps:
 
 import asyncio
 import json
+import logging
 import sys
 from typing import Optional
 
 import httpx
+
+logger = logging.getLogger("ejmapper")
 
 # ── API Endpoint ───────────────────────────────────────────────────────────────
 
@@ -168,12 +171,13 @@ async def get_ejscreen_data(
         or []
     )
     if not rows:
-        # Print raw payload to help debug unexpected structures
-        raise ValueError(
-            f"EJScreen returned no data for ({lat}, {lon}). "
-            "Verify coordinates are within the contiguous US or Puerto Rico. "
-            f"Raw payload keys: {list(payload.keys())}"
+        # Log internals server-side for debugging; raise a generic message so
+        # raw payload structure is never exposed to API clients.
+        logger.warning(
+            "EJScreen returned no rows for (%s, %s). Payload keys: %s",
+            lat, lon, list(payload.keys()),
         )
+        raise ValueError("EJScreen returned no data for the requested location.")
 
     row = rows[0]
 

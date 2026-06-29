@@ -42,6 +42,16 @@ function fmt(value, isPct) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
 
+// Grade key — what each letter means, worst-to-best is F→A. The card highlights
+// whichever grade the report card returned.
+const GRADE_KEY = [
+  { letter: "A", color: "#16a34a", label: "Clean", desc: "Minimal environmental burden" },
+  { letter: "B", color: "#65a30d", label: "Low",   desc: "Below-average burden" },
+  { letter: "C", color: "#ca8a04", label: "Moderate", desc: "Around the national average" },
+  { letter: "D", color: "#ea580c", label: "High",  desc: "Above-average burden" },
+  { letter: "F", color: "#dc2626", label: "Severe", desc: "Among the most burdened areas" },
+];
+
 // ── Mapbox layer style definitions ──────────────────────────────────────────
 const heatmapLayer = {
   id: "air-quality-heat",
@@ -216,6 +226,26 @@ export default function App() {
                 {rc?.grade && <span className="grade-pill">Grade {rc.grade}</span>}
               </div>
               <p className="summary">{rc?.summary}</p>
+            </div>
+          </div>
+
+          {/* Grade key — explains what each letter means */}
+          <div className="grade-key">
+            <span className="grade-key-title">What the grade means</span>
+            <div className="grade-key-row">
+              {GRADE_KEY.map((g) => (
+                <div
+                  key={g.letter}
+                  className={`grade-key-item ${rc?.grade === g.letter ? "active" : ""}`}
+                  style={{ "--g-color": g.color }}
+                >
+                  <span className="grade-key-letter">{g.letter}</span>
+                  <span className="grade-key-text">
+                    <b>{g.label}</b>
+                    <small>{g.desc}</small>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
