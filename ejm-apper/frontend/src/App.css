@@ -23,6 +23,10 @@
   cursor: pointer;
   display: inline-block;
   transition: opacity 0.15s var(--ease);
+  /* Playfair's capital J sits on the baseline, unlike Fraunces' descending J. */
+  font-family: "Playfair Display", "Fraunces", serif;
+  font-variation-settings: normal;
+  letter-spacing: -0.01em;
 }
 @media (hover: hover) and (pointer: fine) {
   .header h1.logo:hover {
