@@ -28,7 +28,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from census_api import zip_to_latlon
+from census_api import zip_to_latlon, latlon_to_zip
 from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
 from mock_data import generate_mock_ejscreen
@@ -133,12 +133,94 @@ async def health():
 
 # ── Main neighborhood route ───────────────────────────────────────────────────
 
+@app.get("/api/nearby-zips/{zip_code}")
+@limiter.limit("10/minute")
+async def nearby_zips_endpoint(request: Request, zip_code: str):
+    """
+    Return up to 6 nearby zip codes with quick environmental scores for comparison.
+    Samples 4 cardinal directions at ~3 miles, reverse-geocodes to zip codes,
+    fetches EJScreen data for each, and returns them sorted cleanest to most burdened.
+    """
+    if not zip_code.isdigit() or len(zip_code) != 5:
+        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+
+    cache_key = f"nearby:{zip_code}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        lat, lon = await zip_to_latlon(zip_code)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Zip code not found.")
+
+    import math
+    RADIUS = 3.0
+    dlat = RADIUS / 69.0
+    dlon = RADIUS / (69.0 * max(0.1, math.cos(math.radians(lat))))
+
+    sample_points = [
+        (lat + dlat, lon),
+        (lat, lon + dlon),
+        (lat - dlat, lon),
+        (lat, lon - dlon),
+        (lat + dlat * 0.7, lon + dlon * 0.7),
+        (lat - dlat * 0.7, lon - dlon * 0.7),
+    ]
+
+    async def get_zip_delayed(plat: float, plon: float, delay: float) -> str | None:
+        await asyncio.sleep(delay)
+        return await latlon_to_zip(plat, plon)
+
+    raw_zips = await asyncio.gather(
+        *[get_zip_delayed(plat, plon, i * 1.1) for i, (plat, plon) in enumerate(sample_points)],
+        return_exceptions=True,
+    )
+
+    seen = {zip_code}
+    unique = []
+    for z in raw_zips:
+        if isinstance(z, str) and z and z.isdigit() and len(z) == 5 and z not in seen:
+            seen.add(z)
+            unique.append(z)
+
+    async def score_zip(z: str):
+        try:
+            zlat, zlon = await zip_to_latlon(z)
+            try:
+                ej = await get_ejscreen_data(zlat, zlon, radius_miles=1.0)
+            except Exception:
+                ej = generate_mock_ejscreen(zlat, zlon, z, radius_miles=1.0)
+            pcts = ej.get("percentiles", {})
+            vals = [v for v in pcts.values() if v is not None]
+            score = round(sum(vals) / len(vals)) if vals else 50
+            return {"zip": z, "score": score, "grade": _quick_grade(score)}
+        except Exception:
+            return None
+
+    scored = await asyncio.gather(*[score_zip(z) for z in unique[:6]])
+    zips = sorted([r for r in scored if r], key=lambda x: x["score"])
+
+    result = {"zips": zips, "center_zip": zip_code}
+    cache_set(cache_key, result)
+    return result
+
+
+def _quick_grade(score: int) -> str:
+    if score < 30: return "A"
+    if score < 50: return "B"
+    if score < 65: return "C"
+    if score < 80: return "D"
+    return "F"
+
+
 @app.get("/api/neighborhood/{zip_code}")
 @limiter.limit("20/minute")
 async def neighborhood(
     request: Request,
     zip_code: str,
     radius: float = Query(1.0, ge=0.1, le=5.0),
+    profile: str = Query("general"),
 ):
     """
     Given a 5-digit US zip code, return:
@@ -152,7 +234,9 @@ async def neighborhood(
 
     # Step 0: Serve from cache when possible. A hit skips the geocode, the EJScreen
     # fetch, AND the paid Claude call — so repeat searches are free.
-    cache_key = f"neighborhood:{zip_code}:{radius}"
+    if profile not in ("general", "children", "elderly", "respiratory"):
+        profile = "general"
+    cache_key = f"neighborhood:{zip_code}:{radius}:{profile}"
     cached = cache_get(cache_key)
     if cached is not None:
         logger.info("cache HIT %s", cache_key)
@@ -188,6 +272,7 @@ async def neighborhood(
         environmental=ejscreen_data["environmental"],
         percentiles=ejscreen_data["percentiles"],
         demographic=ejscreen_data["demographic"],
+        profile=profile,
     )
 
     # Step 4: Return everything (strip _raw — it's too noisy for the frontend)
@@ -285,11 +370,43 @@ async def ejscreen_endpoint(
 
 # ── Claude report card generator ─────────────────────────────────────────────
 
+_PROFILE_CONTEXT = {
+    "general": {
+        "audience": "a resident with no scientific background",
+        "emphasis": "Give a balanced assessment of all major pollution sources.",
+    },
+    "children": {
+        "audience": "a parent concerned about their young children's health (ages 0–12)",
+        "emphasis": (
+            "Prioritize lead paint exposure, traffic-related air pollution, and air toxics "
+            "cancer risk — these most directly affect child development. Mention specific "
+            "risks for kids and what parents can watch for."
+        ),
+    },
+    "elderly": {
+        "audience": "an elderly resident or their caregiver",
+        "emphasis": (
+            "Prioritize fine particles (PM2.5), ozone, and respiratory hazard index — "
+            "these most directly affect older adults. Mention cardiovascular and "
+            "respiratory risks and how they compound with age."
+        ),
+    },
+    "respiratory": {
+        "audience": "someone managing a respiratory condition such as asthma or COPD",
+        "emphasis": (
+            "Heavily prioritize PM2.5, ozone, diesel exhaust, and the respiratory hazard "
+            "index. Be specific about which pollutants are most likely to trigger symptoms "
+            "and give practical day-to-day guidance."
+        ),
+    },
+}
+
 async def generate_report_card(
     zip_code: str,
     environmental: dict,
     percentiles: dict,
     demographic: dict,
+    profile: str = "general",
 ) -> dict:
     """
     Send neighborhood data to Claude and get back a structured report card.
@@ -311,7 +428,11 @@ async def generate_report_card(
     demo_clean = {k: round(v * 100, 1) if v is not None else None
                   for k, v in demographic.items()}
 
+    ctx = _PROFILE_CONTEXT.get(profile, _PROFILE_CONTEXT["general"])
+
     prompt = f"""You are an environmental health analyst writing a neighborhood report card for residents of zip code {zip_code}.
+
+You are writing for {ctx["audience"]}. {ctx["emphasis"]}
 
 Here is the environmental data for this neighborhood (1-mile radius):
 

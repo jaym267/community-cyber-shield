@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import Map, { Marker, Source, Layer } from "react-map-gl";
+import Map, { Marker, Source, Layer, Popup } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./App.css";
 
@@ -120,6 +120,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [profile, setProfile] = useState("general");
+  const [nearbyZips, setNearbyZips] = useState(null);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [facilityPopup, setFacilityPopup] = useState(null);
 
   const toggle = (key) => setVisible((v) => ({ ...v, [key]: !v[key] }));
 
@@ -129,34 +133,45 @@ export default function App() {
     setLayers(null);
     setError(null);
     setHasSearched(false);
+    setNearbyZips(null);
+    setFacilityPopup(null);
     window.history.pushState({}, "", "/");
   };
 
-  const search = async (zipArg, { pushUrl = true } = {}) => {
+  const search = async (zipArg, { pushUrl = true, profileOverride } = {}) => {
     const z = (zipArg ?? zip).toString();
     if (!z || z.length !== 5) {
       setError("Please enter a 5-digit zip code.");
       return;
     }
+    const activeProfile = profileOverride ?? profile;
     setZip(z);
     setLoading(true);
     setError(null);
     setData(null);
     setLayers(null);
+    setNearbyZips(null);
+    setFacilityPopup(null);
     setHasSearched(true);
     // Reflect the searched zip in the URL so the link is shareable / bookmarkable.
     if (pushUrl && window.location.pathname !== `/${z}`) {
       window.history.pushState({ zip: z }, "", `/${z}`);
     }
     try {
-      const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`);
+      const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`, { params: { profile: activeProfile } });
       setData(res.data);
-      // Fetch map overlays in the background — don't block the report card on them.
+      // Fetch map overlays + nearby zips in background — don't block the report card.
       const intensity = airIntensity(res.data.percentiles);
       axios
         .get(`${API_BASE}/api/map-layers/${z}`, { params: { intensity } })
         .then((r) => setLayers(r.data))
         .catch(() => setLayers(null));
+      setNearbyLoading(true);
+      axios
+        .get(`${API_BASE}/api/nearby-zips/${z}`)
+        .then((r) => setNearbyZips(r.data))
+        .catch(() => setNearbyZips(null))
+        .finally(() => setNearbyLoading(false));
     } catch (e) {
       setError(
         e.response?.data?.detail ||
@@ -182,6 +197,13 @@ export default function App() {
   const onKey = (e) => e.key === "Enter" && search();
 
   const rc = data?.report_card;
+
+  const childScore = data ? Math.round(
+    (data.percentiles?.lead_paint_pctile_national ?? 50) * 0.4 +
+    (data.percentiles?.traffic_pctile_national ?? 50) * 0.35 +
+    (data.percentiles?.cancer_risk_pctile_national ?? 50) * 0.25
+  ) : null;
+  const childSev = severity(childScore);
   // Color the score dial by the report's letter grade (falling back to the
   // score-based severity scale if no grade was returned), so the dial, the
   // grade pill, and the grade scale all share one consistent color.
@@ -213,6 +235,28 @@ export default function App() {
         <button onClick={() => search()} disabled={loading}>
           {loading ? "Loading…" : "Search"}
         </button>
+      </div>
+
+      {/* Profile selector — always visible */}
+      <div className="profile-bar">
+        <span className="profile-label">Viewing as:</span>
+        {[
+          { key: "general",     label: "General" },
+          { key: "children",    label: "Parent / Child" },
+          { key: "elderly",     label: "Elderly" },
+          { key: "respiratory", label: "Respiratory" },
+        ].map((p) => (
+          <button
+            key={p.key}
+            className={`profile-btn ${profile === p.key ? "active" : ""}`}
+            onClick={() => {
+              setProfile(p.key);
+              if (data && zip) search(zip, { pushUrl: false, profileOverride: p.key });
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
 
       {!hasSearched && (
@@ -358,6 +402,20 @@ export default function App() {
             {gradeMeta && <p className="grade-key-desc">{gradeMeta.desc}.</p>}
           </div>
 
+          {/* Children's Health Index */}
+          <div className="child-index" style={{ "--child-color": childSev.color, "--child-bg": childSev.bg }}>
+            <div className="child-index-score">
+              <span className="child-num">{childScore ?? "—"}</span>
+              <span className="child-out">/ 100</span>
+            </div>
+            <div className="child-index-body">
+              <div className="child-index-title">Children's Health Index</div>
+              <p className="child-index-desc">
+                Weighted score combining lead paint exposure (40%), traffic pollution (35%), and air toxics cancer risk (25%) — the three indicators most linked to childhood health outcomes. Higher = more risk.
+              </p>
+            </div>
+          </div>
+
           {/* Indicator cards */}
           <div className="section">
             <h3>Environmental indicators</h3>
@@ -452,6 +510,21 @@ export default function App() {
                   style={{ width: "100%", height: 440 }}
                   mapStyle="mapbox://styles/mapbox/light-v11"
                   mapboxAccessToken={MAPBOX_TOKEN}
+                  interactiveLayerIds={layers ? ["facilities-circle"] : []}
+                  onClick={(e) => {
+                    const feature = e.features?.[0];
+                    if (feature?.layer?.id === "facilities-circle") {
+                      setFacilityPopup({
+                        lon: feature.geometry.coordinates[0],
+                        lat: feature.geometry.coordinates[1],
+                        name: feature.properties.name,
+                        type: feature.properties.type,
+                      });
+                    } else {
+                      setFacilityPopup(null);
+                    }
+                  }}
+                  cursor={facilityPopup ? "pointer" : ""}
                 >
                   {/* Green spaces (drawn first, underneath) */}
                   {layers && visible.parks && (
@@ -481,6 +554,32 @@ export default function App() {
                     latitude={data.location.lat}
                     color={dialColor}
                   />
+
+                  {/* Facility popup */}
+                  {facilityPopup && (
+                    <Popup
+                      longitude={facilityPopup.lon}
+                      latitude={facilityPopup.lat}
+                      onClose={() => setFacilityPopup(null)}
+                      closeOnClick={false}
+                      anchor="bottom"
+                    >
+                      <div className="facility-popup">
+                        <strong className="facility-popup-name">{facilityPopup.name}</strong>
+                        <span className={`facility-popup-status ${facilityPopup.type === "Recent violation" ? "violation" : ""}`}>
+                          {facilityPopup.type}
+                        </span>
+                        <a
+                          className="facility-popup-link"
+                          href={`https://echo.epa.gov/facilities/facility-search/results?p_fn=${encodeURIComponent(facilityPopup.name)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View on EPA ECHO
+                        </a>
+                      </div>
+                    </Popup>
+                  )}
                 </Map>
               </div>
 
@@ -494,6 +593,41 @@ export default function App() {
                 )}
             </div>
           )}
+          {/* Nearby zip comparison */}
+          <div className="section">
+            <h3>How does this area compare nearby?</h3>
+            {nearbyLoading && (
+              <div className="nearby-loading">
+                <div className="skel skel-line" style={{ width: "60%", marginBottom: 10 }} />
+                <div className="skel skel-line" style={{ width: "80%", marginBottom: 10 }} />
+                <div className="skel skel-line" style={{ width: "50%" }} />
+              </div>
+            )}
+            {nearbyZips && nearbyZips.zips.length > 0 && (
+              <div className="nearby-grid">
+                {nearbyZips.zips.map((nz) => {
+                  const s = severity(nz.score);
+                  const isCurrent = nz.zip === data.zip_code;
+                  return (
+                    <button
+                      key={nz.zip}
+                      className={`nearby-card ${isCurrent ? "current" : ""}`}
+                      style={{ "--nz-color": s.color, "--nz-bg": s.bg }}
+                      onClick={() => !isCurrent && search(nz.zip)}
+                    >
+                      <span className="nearby-zip">{nz.zip}</span>
+                      <span className="nearby-grade">{nz.grade}</span>
+                      <span className="nearby-score">{nz.score}</span>
+                      {isCurrent && <span className="nearby-current-tag">current</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {nearbyZips && nearbyZips.zips.length === 0 && (
+              <p className="map-note">No nearby zip codes found for comparison.</p>
+            )}
+          </div>
         </div>
       )}
     </div>

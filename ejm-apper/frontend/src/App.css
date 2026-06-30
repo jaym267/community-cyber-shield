@@ -576,6 +576,200 @@
   background: #5c7a45;
 }
 
+/* ── Profile selector ────────────────────────────────────────────────────── */
+.profile-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.profile-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.profile-btn {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .profile-btn:hover:not(.active) {
+    border-color: #c9bb9a;
+    color: var(--text);
+  }
+}
+.profile-btn.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+/* ── Children's Health Index ─────────────────────────────────────────────── */
+.child-index {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--child-color, var(--brand));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+.child-index-score {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--child-bg, var(--surface-2));
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  min-width: 72px;
+}
+.child-num {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--child-color, var(--text));
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variation-settings: 'opsz' 72;
+}
+.child-out {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+.child-index-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.child-index-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── Facility popup ──────────────────────────────────────────────────────── */
+.facility-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: "Work Sans", sans-serif;
+  min-width: 180px;
+}
+.facility-popup-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+.facility-popup-status {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  align-self: flex-start;
+}
+.facility-popup-status.violation {
+  background: var(--severe-bg);
+  color: var(--severe);
+}
+.facility-popup-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand);
+  text-decoration: none;
+  margin-top: 2px;
+}
+.facility-popup-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Nearby zip comparison ───────────────────────────────────────────────── */
+.nearby-loading {
+  padding: 8px 0;
+}
+.nearby-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+.nearby-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  background: var(--nz-bg, var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  font-family: inherit;
+}
+.nearby-card.current {
+  border-color: var(--nz-color);
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .nearby-card:not(.current):hover {
+    border-color: var(--nz-color);
+    box-shadow: var(--shadow);
+  }
+}
+.nearby-zip {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.nearby-grade {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--nz-color);
+}
+.nearby-score {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.nearby-current-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--surface);
+  background: var(--nz-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 2px;
+}
+
 /* ── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 560px) {
   .app {

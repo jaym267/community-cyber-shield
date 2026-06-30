@@ -1,6 +1,19 @@
 import asyncio
 import httpx
 
+async def latlon_to_zip(lat: float, lon: float) -> str | None:
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {"lat": lat, "lon": lon, "format": "json"}
+    headers = {"User-Agent": "EJMapper/1.0"}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(url, params=params, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        return data.get("address", {}).get("postcode")
+    except Exception:
+        return None
+
 async def zip_to_latlon(zip_code: str) -> tuple[float, float]:
     url = "https://nominatim.openstreetmap.org/search"
     params = {
