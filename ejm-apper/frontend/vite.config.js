@@ -9,4 +9,10 @@ export default defineConfig({
     // via 127.0.0.1, localhost, or LAN IP — not just the IPv6 loopback.
     host: true,
   },
+  build: {
+    // Drop Vite's inline module-preload polyfill so the strict Content-Security-Policy
+    // (script-src 'self', no 'unsafe-inline') in vercel.json doesn't block it.
+    // Modern browsers support <link rel="modulepreload"> natively.
+    modulePreload: { polyfill: false },
+  },
 })

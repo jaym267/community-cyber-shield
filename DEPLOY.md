@@ -61,3 +61,23 @@ cd ejm-apper/frontend && npm run dev                 # http://localhost:5173
 ```
 
 The frontend falls back to `http://127.0.0.1:8000` when `VITE_API_BASE` is unset.
+
+---
+
+## 4. Security headers & Content-Security-Policy
+
+The frontend ships security headers (incl. a Content-Security-Policy) via
+[`vercel.json`](ejm-apper/frontend/vercel.json), and the backend sets its own
+headers in `main.py`. Two things to know:
+
+- **CSP `connect-src` allows `https://*.onrender.com` and `https://*.mapbox.com`.**
+  If you host the backend somewhere other than Render's default `*.onrender.com`
+  domain (e.g. a custom domain), add that origin to the `connect-src` directive
+  in `vercel.json`, or the frontend's API calls will be blocked by the browser.
+- After the first deploy, open the site, hit a search, and check the browser
+  console for any `Content-Security-Policy` violation warnings. If the map or
+  data fails to load, a blocked origin in `connect-src`/`img-src` is the usual
+  cause — add it and redeploy.
+
+> The legal pages (Disclaimer / Privacy / Terms) in the footer are plain-English
+> templates. Have a lawyer review them before a serious public launch.

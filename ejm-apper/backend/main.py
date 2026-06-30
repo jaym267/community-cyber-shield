@@ -72,6 +72,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), browsing-topics=()"
+        )
+        # API responses are JSON and embed nothing — lock them down hard. Skip the
+        # docs/openapi paths so Swagger UI (which needs CDN scripts) still renders.
+        if not request.url.path.startswith(("/docs", "/redoc", "/openapi")):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+            )
         return response
 
 
