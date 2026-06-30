@@ -17,6 +17,17 @@
   letter-spacing: -0.02em;
   margin: 0 0 6px;
   color: var(--text);
+  font-variation-settings: 'opsz' 144;
+}
+.header h1.logo {
+  cursor: pointer;
+  display: inline-block;
+  transition: opacity 0.15s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .header h1.logo:hover {
+    opacity: 0.7;
+  }
 }
 .header .disclaimer {
   font-size: 12px;
@@ -91,6 +102,62 @@
 .chip:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--brand-tint);
+}
+
+/* ── Landing description ─────────────────────────────────────────────────── */
+.landing {
+  max-width: 620px;
+  margin: 0 auto 48px;
+  text-align: center;
+}
+.landing-lead {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+.landing-body {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0 0 28px;
+}
+.landing-facts {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.landing-fact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 12px;
+  border-right: 1px solid var(--border);
+}
+.landing-fact:last-child {
+  border-right: none;
+}
+.fact-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--brand);
+  letter-spacing: -0.01em;
+  font-variation-settings: 'opsz' 72;
+  margin-bottom: 4px;
+}
+.fact-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* ── Banners ─────────────────────────────────────────────────────────────── */
