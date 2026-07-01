@@ -13,7 +13,9 @@ Start:
 """
 
 import asyncio
+import json
 import logging
+import math
 import os
 import time
 
@@ -133,6 +135,20 @@ def cache_set(key: str, value: dict) -> None:
     _cache[key] = (time.time(), value)
 
 
+def require_zip(zip_code: str) -> None:
+    """400 unless zip_code is exactly 5 digits — shared by every zip route."""
+    if not zip_code.isdigit() or len(zip_code) != 5:
+        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+
+
+async def resolve_zip(zip_code: str) -> tuple[float, float]:
+    """Geocode a zip to (lat, lon), mapping failure to a clean 404."""
+    try:
+        return await zip_to_latlon(zip_code)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Zip code not found.")
+
+
 # ── Health check ──────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
@@ -140,7 +156,7 @@ async def health():
     return {"status": "ok", "service": "EJMapper API"}
 
 
-# ── Main neighborhood route ───────────────────────────────────────────────────
+# ── Nearby-zip comparison route ───────────────────────────────────────────────
 
 @app.get("/api/nearby-zips/{zip_code}")
 @limiter.limit("10/minute")
@@ -150,20 +166,15 @@ async def nearby_zips_endpoint(request: Request, zip_code: str):
     Samples 4 cardinal directions at ~3 miles, reverse-geocodes to zip codes,
     fetches EJScreen data for each, and returns them sorted cleanest to most burdened.
     """
-    if not zip_code.isdigit() or len(zip_code) != 5:
-        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+    require_zip(zip_code)
 
     cache_key = f"nearby:{zip_code}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
 
-    try:
-        lat, lon = await zip_to_latlon(zip_code)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Zip code not found.")
+    lat, lon = await resolve_zip(zip_code)
 
-    import math
     RADIUS = 3.0
     dlat = RADIUS / 69.0
     dlon = RADIUS / (69.0 * max(0.1, math.cos(math.radians(lat))))
@@ -238,12 +249,11 @@ async def neighborhood(
       - demographic breakdown
       - an AI-generated plain-language report card with a 0–100 score
     """
-    if not zip_code.isdigit() or len(zip_code) != 5:
-        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+    require_zip(zip_code)
 
     # Step 0: Serve from cache when possible. A hit skips the geocode, the EJScreen
     # fetch, AND the paid Claude call — so repeat searches are free.
-    if profile not in ("general", "children", "elderly", "respiratory"):
+    if profile not in _PROFILE_CONTEXT:
         profile = "general"
     cache_key = f"neighborhood:{zip_code}:{radius}:{profile}"
     cached = cache_get(cache_key)
@@ -253,10 +263,7 @@ async def neighborhood(
     logger.info("cache MISS %s", cache_key)
 
     # Step 1: Convert zip code to coordinates
-    try:
-        lat, lon = await zip_to_latlon(zip_code)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Zip code not found.")
+    lat, lon = await resolve_zip(zip_code)
 
     # Step 2: Fetch EJScreen data. If the EPA API is unreachable/timing out/erroring
     # (it goes down periodically), transparently fall back to mock data so the app
@@ -319,8 +326,7 @@ async def map_layers(
 
     Facilities and green spaces are fetched in parallel.
     """
-    if not zip_code.isdigit() or len(zip_code) != 5:
-        raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
+    require_zip(zip_code)
 
     cache_key = f"map-layers:{zip_code}:{round(intensity)}:{radius}"
     cached = cache_get(cache_key)
@@ -329,10 +335,7 @@ async def map_layers(
         return cached
     logger.info("cache MISS %s", cache_key)
 
-    try:
-        lat, lon = await zip_to_latlon(zip_code)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Zip code not found.")
+    lat, lon = await resolve_zip(zip_code)
 
     facilities, green_spaces = await asyncio.gather(
         facilities_geojson(lat, lon, radius_miles=radius),
@@ -486,7 +489,6 @@ Rules:
     raw_text = message.content[0].text.strip()
 
     # Parse the JSON Claude returns
-    import json
     try:
         return json.loads(raw_text)
     except json.JSONDecodeError:

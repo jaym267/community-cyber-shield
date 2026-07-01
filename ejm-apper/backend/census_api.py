@@ -1,38 +1,32 @@
-import asyncio
+"""census_api.py — Nominatim geocoding helpers (zip ↔ coordinates)."""
+
 import httpx
 
-async def latlon_to_zip(lat: float, lon: float) -> str | None:
-    url = "https://nominatim.openstreetmap.org/reverse"
-    params = {"lat": lat, "lon": lon, "format": "json"}
-    headers = {"User-Agent": "EJMapper/1.0"}
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(url, params=params, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-        return data.get("address", {}).get("postcode")
-    except Exception:
-        return None
+_NOMINATIM = "https://nominatim.openstreetmap.org"
+# Nominatim's usage policy requires an identifying User-Agent on every request.
+_HEADERS = {"User-Agent": "EJMapper/1.0 (github.com/jaym267/community-cyber-shield)"}
+
 
 async def zip_to_latlon(zip_code: str) -> tuple[float, float]:
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "postalcode": zip_code,
-        "country":    "US",
-        "format":     "json",
-        "limit":      1,
-    }
-    headers = {"User-Agent": "EJMapper/1.0"}
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(url, params=params, headers=headers)
+    """Resolve a US zip code to (lat, lon). Raises ValueError if not found."""
+    params = {"postalcode": zip_code, "country": "US", "format": "json", "limit": 1}
+    async with httpx.AsyncClient(timeout=10.0, headers=_HEADERS) as client:
+        resp = await client.get(f"{_NOMINATIM}/search", params=params)
         resp.raise_for_status()
         results = resp.json()
 
     if not results:
         raise ValueError(f"Could not find coordinates for zip code {zip_code}.")
-
     return float(results[0]["lat"]), float(results[0]["lon"])
 
-def zip_to_latlon_sync(zip_code: str) -> tuple[float, float]:
-    return asyncio.run(zip_to_latlon(zip_code))
+
+async def latlon_to_zip(lat: float, lon: float) -> str | None:
+    """Reverse-geocode a point to its zip code; returns None on any failure."""
+    params = {"lat": lat, "lon": lon, "format": "json"}
+    try:
+        async with httpx.AsyncClient(timeout=8.0, headers=_HEADERS) as client:
+            resp = await client.get(f"{_NOMINATIM}/reverse", params=params)
+            resp.raise_for_status()
+            return resp.json().get("address", {}).get("postcode")
+    except Exception:
+        return None

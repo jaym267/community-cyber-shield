@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import Map, { Marker, Source, Layer, Popup } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -12,27 +12,54 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 // The 12 EJScreen indicators, in display order. Each pairs the raw value key
 // (from `environmental`) with its national-percentile key (from `percentiles`).
 // `pct: true` means the raw value is a 0–1 fraction shown as a percentage.
+// `desc` is the plain-language explainer shown when a card is expanded.
 const INDICATORS = [
-  { env: "pm25_avg_ugm3",             pctl: "pm25_pctile_national",        label: "Fine particles (PM2.5)",   unit: "µg/m³" },
-  { env: "ozone_ppb",                 pctl: "ozone_pctile_national",       label: "Ozone",                    unit: "ppb" },
-  { env: "diesel_pm_ugm3",            pctl: "diesel_pm_pctile_national",   label: "Diesel exhaust",           unit: "µg/m³" },
-  { env: "air_toxics_cancer_risk",    pctl: "cancer_risk_pctile_national", label: "Air toxics cancer risk",   unit: "per million" },
-  { env: "air_toxics_resp_hazard",    pctl: "resp_hazard_pctile_national", label: "Respiratory hazard",       unit: "index" },
-  { env: "traffic_proximity",         pctl: "traffic_pctile_national",     label: "Traffic proximity",        unit: "vehicles/m" },
-  { env: "lead_paint_pct",            pctl: "lead_paint_pctile_national",  label: "Lead paint (pre-1960 homes)", unit: "", pct: true },
-  { env: "superfund_proximity",       pctl: "superfund_pctile_national",   label: "Superfund sites",          unit: "per km²" },
-  { env: "rmp_facility_proximity",    pctl: "rmp_pctile_national",         label: "Risk-management facilities", unit: "per km²" },
-  { env: "hazwaste_proximity",        pctl: "hazwaste_pctile_national",    label: "Hazardous waste sites",    unit: "per km²" },
-  { env: "underground_storage_tanks", pctl: "ust_pctile_national",         label: "Underground storage tanks", unit: "per km²" },
-  { env: "wastewater_discharge",      pctl: "wastewater_pctile_national",  label: "Wastewater discharge",     unit: "index" },
+  { env: "pm25_avg_ugm3", pctl: "pm25_pctile_national", label: "Fine particles (PM2.5)", unit: "µg/m³",
+    desc: "Microscopic particles from vehicles, industry, and smoke that lodge deep in the lungs. Long-term exposure is linked to heart and lung disease." },
+  { env: "ozone_ppb", pctl: "ozone_pctile_national", label: "Ozone", unit: "ppb",
+    desc: "A gas formed when sunlight reacts with vehicle and industrial emissions. High levels trigger asthma attacks and irritate airways." },
+  { env: "diesel_pm_ugm3", pctl: "diesel_pm_pctile_national", label: "Diesel exhaust", unit: "µg/m³",
+    desc: "Exhaust particles from trucks, buses, and heavy equipment — a known carcinogen, concentrated near highways and freight routes." },
+  { env: "air_toxics_cancer_risk", pctl: "cancer_risk_pctile_national", label: "Air toxics cancer risk", unit: "per million",
+    desc: "Estimated lifetime cancer risk from breathing the air toxics present locally, expressed per million people exposed." },
+  { env: "air_toxics_resp_hazard", pctl: "resp_hazard_pctile_national", label: "Respiratory hazard", unit: "index",
+    desc: "An index of airborne toxics that can harm breathing. Values approaching 1 indicate growing potential for respiratory effects." },
+  { env: "traffic_proximity", pctl: "traffic_pctile_national", label: "Traffic proximity", unit: "vehicles/m",
+    desc: "How much high-volume road traffic passes close to homes here — a strong proxy for exhaust exposure and noise." },
+  { env: "lead_paint_pct", pctl: "lead_paint_pctile_national", label: "Lead paint (pre-1960 homes)", unit: "", pct: true,
+    desc: "Share of housing built before 1960, when lead paint was common. Lead exposure permanently affects children's development." },
+  { env: "superfund_proximity", pctl: "superfund_pctile_national", label: "Superfund sites", unit: "per km²",
+    desc: "Nearness to federally designated hazardous-waste cleanup sites on the National Priorities List." },
+  { env: "rmp_facility_proximity", pctl: "rmp_pctile_national", label: "Risk-management facilities", unit: "per km²",
+    desc: "Nearness to facilities that handle chemicals dangerous enough to require a federal risk-management plan." },
+  { env: "hazwaste_proximity", pctl: "hazwaste_pctile_national", label: "Hazardous waste sites", unit: "per km²",
+    desc: "Nearness to hazardous-waste treatment, storage, and disposal facilities." },
+  { env: "underground_storage_tanks", pctl: "ust_pctile_national", label: "Underground storage tanks", unit: "per km²",
+    desc: "Density of underground fuel and chemical tanks, which can leak into soil and groundwater over time." },
+  { env: "wastewater_discharge", pctl: "wastewater_pctile_national", label: "Wastewater discharge", unit: "index",
+    desc: "Toxicity-weighted industrial wastewater released into nearby streams and rivers." },
+];
+
+const PROFILES = [
+  { key: "general", label: "General" },
+  { key: "children", label: "Parent / Child" },
+  { key: "elderly", label: "Elderly" },
+  { key: "respiratory", label: "Respiratory" },
+];
+
+const SAMPLE_ZIPS = [
+  { zip: "78207", place: "San Antonio TX" },
+  { zip: "90011", place: "Los Angeles CA" },
+  { zip: "60623", place: "Chicago IL" },
+  { zip: "11212", place: "Brooklyn NY" },
 ];
 
 // Map a 0–100 burden value (higher = worse) to a severity color + background.
 function severity(value) {
   if (value == null) return { color: "#9a8f7a", bg: "#efe9da" };
-  if (value < 50)  return { color: "var(--good)",     bg: "var(--good-bg)" };
-  if (value < 75)  return { color: "var(--moderate)", bg: "var(--moderate-bg)" };
-  if (value < 90)  return { color: "var(--elevated)", bg: "var(--elevated-bg)" };
+  if (value < 50) return { color: "var(--good)", bg: "var(--good-bg)" };
+  if (value < 75) return { color: "var(--moderate)", bg: "var(--moderate-bg)" };
+  if (value < 90) return { color: "var(--elevated)", bg: "var(--elevated-bg)" };
   return { color: "var(--severe)", bg: "var(--severe-bg)" };
 }
 
@@ -42,13 +69,13 @@ function fmt(value, isPct) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
 
-// Grade key — what each letter means, worst-to-best is A→F, rendered as a
-// single gradient scale bar with the current grade marked on it.
+// Grade key — worst-to-best is A→F, rendered as a gradient scale bar with the
+// current grade marked on it.
 const GRADE_KEY = [
   { letter: "A", color: "#3f6b34", label: "Clean", desc: "Minimal environmental burden" },
-  { letter: "B", color: "#6b8f3f", label: "Low",   desc: "Below-average burden" },
+  { letter: "B", color: "#6b8f3f", label: "Low", desc: "Below-average burden" },
   { letter: "C", color: "#b08a1f", label: "Moderate", desc: "Around the national average" },
-  { letter: "D", color: "#c1672f", label: "High",  desc: "Above-average burden" },
+  { letter: "D", color: "#c1672f", label: "High", desc: "Above-average burden" },
   { letter: "F", color: "#8c2f23", label: "Severe", desc: "Among the most burdened areas" },
 ];
 
@@ -112,6 +139,72 @@ function airIntensity(percentiles) {
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
+const prefersReducedMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+// Animate a number from 0 to `target`. Instant under reduced motion or in a
+// hidden tab (browsers suspend requestAnimationFrame there); a settle timer
+// guarantees the final value lands even if animation frames never fire.
+function useCountUp(target, duration = 700) {
+  const [val, setVal] = useState(target);
+  useEffect(() => {
+    if (target == null) { setVal(null); return; }
+    if (prefersReducedMotion() || document.hidden) { setVal(target); return; }
+    let raf;
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setVal(t < 1 ? Math.round(target * eased) : target);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const settle = setTimeout(() => setVal(target), duration + 200);
+    return () => { cancelAnimationFrame(raf); clearTimeout(settle); };
+  }, [target, duration]);
+  return val;
+}
+
+// Recent searches live only in the visitor's own browser (localStorage).
+const RECENTS_KEY = "ejmapper_recent_zips";
+function loadRecents() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((z) => /^\d{5}$/.test(z)).slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+function saveRecent(zip) {
+  try {
+    const next = [zip, ...loadRecents().filter((z) => z !== zip)].slice(0, 5);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return [zip];
+  }
+}
+
+// Decorative topographic contour lines for the landing hero.
+function ContourBackground() {
+  return (
+    <svg className="contours" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <path
+          key={i}
+          d={`M -100 ${140 + i * 95}
+              C 200 ${90 + i * 95}, 380 ${210 + i * 88}, 620 ${150 + i * 92}
+              S 1000 ${80 + i * 96}, 1300 ${170 + i * 90}`}
+          fill="none"
+          stroke="var(--brand)"
+          strokeWidth="1.1"
+          opacity={0.05 + i * 0.008}
+        />
+      ))}
+    </svg>
+  );
+}
+
 // Legal text shown in the footer modal. Plain-English, app-specific boilerplate —
 // not a substitute for review by a lawyer before serious public launch.
 const LEGAL_UPDATED = "June 2026";
@@ -130,9 +223,10 @@ const LEGAL = {
     body: [
       "EJMapper does not require an account and does not ask for your name, email, or any personal information.",
       "When you search a ZIP code, that ZIP code is sent to our backend and to third-party data providers (OpenStreetMap's Nominatim geocoder and the U.S. EPA) to look up results. Map tiles are loaded from Mapbox, which may receive your IP address and basic usage data under Mapbox's own privacy policy.",
+      "Your recent searches are saved only in your own browser's local storage so they can be offered as shortcuts; they are never transmitted to us and you can clear them at any time by clearing your browser data.",
       "We cache results by ZIP code to reduce cost and load. This cache stores environmental data only — it contains no personal information and is not linked to you.",
       "We do not use cookies, advertising, or third-party analytics/tracking. Our hosting providers (e.g. Vercel and Render) may automatically log standard technical request metadata such as IP address and timestamp for security and reliability, as described in their own privacy policies.",
-      "Because no personal data is collected or stored, there is nothing for us to sell, share, or delete on request.",
+      "Because no personal data is collected or stored by us, there is nothing for us to sell, share, or delete on request.",
     ],
   },
   terms: {
@@ -149,7 +243,6 @@ const LEGAL = {
 
 export default function App() {
   const [zip, setZip] = useState("");
-  const [legalDoc, setLegalDoc] = useState(null);
   const [data, setData] = useState(null);
   const [layers, setLayers] = useState(null);
   const [visible, setVisible] = useState({ air: true, facilities: true, parks: true });
@@ -160,6 +253,15 @@ export default function App() {
   const [nearbyZips, setNearbyZips] = useState(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [facilityPopup, setFacilityPopup] = useState(null);
+  const [legalDoc, setLegalDoc] = useState(null);
+  // New-feature state
+  const [recents, setRecents] = useState(loadRecents);
+  const [shareMsg, setShareMsg] = useState(null);
+  const [pinned, setPinned] = useState(null);       // {zip, score, grade, percentiles}
+  const [openInd, setOpenInd] = useState(null);     // env key of the expanded indicator
+  const [mapCenter, setMapCenter] = useState(null); // survives loads so the map persists
+
+  const mapRef = useRef(null);
 
   const toggle = (key) => setVisible((v) => ({ ...v, [key]: !v[key] }));
 
@@ -171,6 +273,9 @@ export default function App() {
     setHasSearched(false);
     setNearbyZips(null);
     setFacilityPopup(null);
+    setPinned(null);
+    setOpenInd(null);
+    setMapCenter(null);
     window.history.pushState({}, "", "/");
   };
 
@@ -188,14 +293,19 @@ export default function App() {
     setLayers(null);
     setNearbyZips(null);
     setFacilityPopup(null);
+    setOpenInd(null);
     setHasSearched(true);
     // Reflect the searched zip in the URL so the link is shareable / bookmarkable.
     if (pushUrl && window.location.pathname !== `/${z}`) {
       window.history.pushState({ zip: z }, "", `/${z}`);
     }
     try {
-      const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`, { params: { profile: activeProfile } });
+      const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`, {
+        params: { profile: activeProfile },
+      });
       setData(res.data);
+      setMapCenter({ lat: res.data.location.lat, lon: res.data.location.lon });
+      setRecents(saveRecent(z));
       // Fetch map overlays + nearby zips in background — don't block the report card.
       const intensity = airIntensity(res.data.percentiles);
       axios
@@ -238,462 +348,563 @@ export default function App() {
     return () => window.removeEventListener("keydown", onEsc);
   }, [legalDoc]);
 
+  // Glide the persistent map to each newly searched location.
+  useEffect(() => {
+    if (!data?.location || !mapRef.current) return;
+    const center = [data.location.lon, data.location.lat];
+    if (prefersReducedMotion()) {
+      mapRef.current.jumpTo({ center, zoom: 12.5 });
+    } else {
+      mapRef.current.flyTo({ center, zoom: 12.5, duration: 1800, essential: true });
+    }
+  }, [data?.location?.lat, data?.location?.lon]);
+
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShareMsg("Link copied");
+    } catch {
+      setShareMsg("Copy blocked — use the address bar");
+    }
+    setTimeout(() => setShareMsg(null), 2000);
+  };
+
+  const togglePin = () => {
+    if (!data || !rc) return;
+    if (pinned?.zip === data.zip_code) {
+      setPinned(null);
+    } else {
+      setPinned({
+        zip: data.zip_code,
+        score: rc.score,
+        grade: rc.grade,
+        percentiles: data.percentiles,
+      });
+    }
+  };
+
   const onKey = (e) => e.key === "Enter" && search();
 
   const rc = data?.report_card;
+  const displayScore = useCountUp(rc?.score ?? null);
+  const comparing = pinned && data && pinned.zip !== data.zip_code;
 
-  const childScore = data ? Math.round(
-    (data.percentiles?.lead_paint_pctile_national ?? 50) * 0.4 +
-    (data.percentiles?.traffic_pctile_national ?? 50) * 0.35 +
-    (data.percentiles?.cancer_risk_pctile_national ?? 50) * 0.25
-  ) : null;
+  const childScore = data
+    ? Math.round(
+        (data.percentiles?.lead_paint_pctile_national ?? 50) * 0.4 +
+        (data.percentiles?.traffic_pctile_national ?? 50) * 0.35 +
+        (data.percentiles?.cancer_risk_pctile_national ?? 50) * 0.25
+      )
+    : null;
   const childSev = severity(childScore);
   // Color the score dial by the report's letter grade (falling back to the
-  // score-based severity scale if no grade was returned), so the dial, the
-  // grade pill, and the grade scale all share one consistent color.
+  // score-based severity scale), so dial, pill, marker, and scale stay consistent.
   const gradeIndex = GRADE_KEY.findIndex((g) => g.letter === rc?.grade);
   const gradeMeta = gradeIndex >= 0 ? GRADE_KEY[gradeIndex] : null;
   const dialColor = gradeMeta?.color || severity(rc?.score).color;
   const dialBg = `color-mix(in srgb, ${dialColor} 12%, var(--surface))`;
   const gradeGradient = `linear-gradient(90deg, ${GRADE_KEY.map((g) => g.color).join(", ")})`;
 
+  const searchBox = (big) => (
+    <div className={big ? "search search-big" : "search search-compact"}>
+      <input
+        value={zip}
+        onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+        onKeyDown={onKey}
+        placeholder="Enter a 5-digit zip code"
+        aria-label="Zip code"
+        inputMode="numeric"
+        maxLength={5}
+      />
+      <button onClick={() => search()} disabled={loading}>
+        {loading ? "Loading…" : "Search"}
+      </button>
+    </div>
+  );
+
+  const footer = (
+    <footer className="site-footer">
+      <p className="footer-attrib">
+        Environmental data: U.S. EPA EJScreen. Maps &amp; place data:{" "}
+        <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
+        Geocoding by OpenStreetMap Nominatim.
+      </p>
+      <p className="footer-legal">
+        <button type="button" onClick={() => setLegalDoc("disclaimer")}>Disclaimer</button>
+        <span aria-hidden="true">·</span>
+        <button type="button" onClick={() => setLegalDoc("privacy")}>Privacy</button>
+        <span aria-hidden="true">·</span>
+        <button type="button" onClick={() => setLegalDoc("terms")}>Terms</button>
+      </p>
+      <p className="footer-note">
+        For informational use only — not professional advice. Verify critical information with official sources.
+      </p>
+    </footer>
+  );
+
   return (
-    <div className="app">
-      <header className="header">
-        <h1 className="logo" onClick={reset} title="Start a new search">EJMapper</h1>
-        <p className="tagline">Environmental justice by zip code</p>
-        <p className="disclaimer">
-          Report cards are generated by Claude, an AI model by Anthropic, using data from the EPA EJScreen database. AI-generated summaries may contain errors — always verify critical information with official sources.
-        </p>
-      </header>
-
-      <div className="search">
-        <input
-          value={zip}
-          onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-          onKeyDown={onKey}
-          placeholder="Enter a 5-digit zip code"
-          inputMode="numeric"
-          maxLength={5}
-        />
-        <button onClick={() => search()} disabled={loading}>
-          {loading ? "Loading…" : "Search"}
-        </button>
-      </div>
-
-      {/* Profile selector — always visible */}
-      <div className="profile-bar">
-        <span className="profile-label">Viewing as:</span>
-        {[
-          { key: "general",     label: "General" },
-          { key: "children",    label: "Parent / Child" },
-          { key: "elderly",     label: "Elderly" },
-          { key: "respiratory", label: "Respiratory" },
-        ].map((p) => (
-          <button
-            key={p.key}
-            className={`profile-btn ${profile === p.key ? "active" : ""}`}
-            onClick={() => {
-              setProfile(p.key);
-              if (data && zip) search(zip, { pushUrl: false, profileOverride: p.key });
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
+    <div className={`app ${hasSearched ? "atlas-mode" : "landing-mode"}`}>
+      {/* ── Landing ─────────────────────────────────────────────────────── */}
       {!hasSearched && (
-        <div className="landing">
-          <p className="landing-lead">
-            Find out what environmental hazards exist in your neighborhood.
-          </p>
-          <p className="landing-body">
-            EJMapper pulls data directly from the EPA's EJScreen database and uses AI to turn
-            it into a plain-language report card — no scientific background required. Enter any
-            US zip code to see air quality, pollution levels, proximity to industrial sites,
-            and how your area compares to the rest of the country.
-          </p>
-          <div className="landing-facts">
-            <div className="landing-fact">
-              <span className="fact-num">12</span>
-              <span className="fact-label">Environmental indicators tracked</span>
-            </div>
-            <div className="landing-fact">
-              <span className="fact-num">A–F</span>
-              <span className="fact-label">Plain-language grade for every zip</span>
-            </div>
-            <div className="landing-fact">
-              <span className="fact-num">EPA</span>
-              <span className="fact-label">Data sourced from EJScreen</span>
-            </div>
-          </div>
-        </div>
-      )}
+        <div className="landing-hero">
+          <ContourBackground />
+          <div className="hero-inner">
+            <h1 className="wordmark">EJMapper</h1>
+            <p className="tagline">Environmental justice by zip code</p>
+            <p className="hero-lead">
+              Every neighborhood has an environmental story. Enter a zip code to
+              see air quality, pollution burden, industrial sites, and green
+              space — turned into a plain-language report card.
+            </p>
 
-      {error && <div className="banner error">{error}</div>}
+            {searchBox(true)}
+            {error && <div className="banner error hero-error">{error}</div>}
 
-      {loading && (
-        <div className="skeleton-report">
-          <div className="score-card skel-card">
-            <div className="skel skel-dial" />
-            <div className="score-body">
-              <div className="skel skel-line" style={{ width: "55%", marginBottom: 12 }} />
-              <div className="skel skel-line" style={{ width: "90%", marginBottom: 6 }} />
-              <div className="skel skel-line" style={{ width: "70%" }} />
-            </div>
-          </div>
-          <div className="grade-key skel-card">
-            <div className="skel skel-line" style={{ width: "30%", marginBottom: 16 }} />
-            <div className="skel" style={{ height: 8, borderRadius: 999, marginBottom: 12 }} />
-            <div className="skel skel-line" style={{ width: "80%" }} />
-          </div>
-          <div className="section">
-            <div className="skel skel-heading" />
-            <div className="indicator-grid">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div className="indicator skel-card" key={i} style={{ opacity: 1, animation: "none" }}>
-                  <div className="skel skel-line" style={{ width: "70%", marginBottom: 14 }} />
-                  <div className="skel skel-line" style={{ width: "40%", height: 22, marginBottom: 14 }} />
-                  <div className="skel" style={{ height: 5, borderRadius: 999, marginBottom: 10 }} />
-                  <div className="skel skel-line" style={{ width: "60%" }} />
-                </div>
+            <div className="zip-chips">
+              <span className="zip-chips-label">Try</span>
+              {SAMPLE_ZIPS.map((s) => (
+                <button key={s.zip} className="zip-chip" onClick={() => search(s.zip)}>
+                  <b>{s.zip}</b> {s.place}
+                </button>
               ))}
             </div>
-          </div>
-          <div className="section">
-            <div className="skel skel-heading" />
-            {[80, 90, 65].map((w, i) => (
-              <div className="list-item" key={i} style={{ marginBottom: 9 }}>
-                <div className="skel skel-line" style={{ width: `${w}%` }} />
-              </div>
-            ))}
-          </div>
-          <div className="section">
-            <div className="skel skel-heading" />
-            {[75, 88].map((w, i) => (
-              <div className="list-item action" key={i} style={{ marginBottom: 9 }}>
-                <div className="skel skel-line" style={{ width: `${w}%` }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {data && !loading && (
-        <div className="report" key={data.zip_code}>
-          {data.data_source === "mock" && (
-            <div className="banner mock">
-              Showing estimated data — the EPA EJScreen service is temporarily offline.
-            </div>
-          )}
-
-          {/* Score hero */}
-          <div
-            className="score-card"
-            style={{ "--sev-color": dialColor, "--sev-bg": dialBg }}
-          >
-            <div className="score-dial">
-              <span className="num">{rc?.score ?? "—"}</span>
-              <span className="out-of">out of 100</span>
-            </div>
-            <div className="score-body">
-              <div className="zip-line">
-                <h2>Zip code {data.zip_code}</h2>
-                {rc?.grade && <span className="grade-pill">Grade {rc.grade}</span>}
-              </div>
-              <p className="summary">{rc?.summary}</p>
-            </div>
-          </div>
-
-          {/* Grade key — a single gradient scale, A (clean) to F (severe),
-              with the current grade marked on it. */}
-          <div className="grade-key">
-            <span className="grade-key-title">What the grade means</span>
-            <div className="grade-scale">
-              <div
-                className="grade-scale-track"
-                style={{ background: gradeGradient }}
-              >
-                {gradeIndex >= 0 && (
-                  <span
-                    className="grade-scale-marker"
-                    style={{ left: `${(gradeIndex / (GRADE_KEY.length - 1)) * 100}%` }}
-                  >
-                    {rc.grade}
-                  </span>
-                )}
-              </div>
-              <div className="grade-scale-ticks">
-                {GRADE_KEY.map((g) => (
-                  <span
-                    key={g.letter}
-                    className={`grade-scale-tick ${rc?.grade === g.letter ? "active" : ""}`}
-                  >
-                    {g.letter}
-                  </span>
+            {recents.length > 0 && (
+              <div className="zip-chips recents">
+                <span className="zip-chips-label">Recent</span>
+                {recents.map((r) => (
+                  <button key={r} className="zip-chip" onClick={() => search(r)}>
+                    <b>{r}</b>
+                  </button>
                 ))}
               </div>
+            )}
+
+            <div className="landing-facts">
+              <div className="landing-fact">
+                <span className="fact-num">12</span>
+                <span className="fact-label">Environmental indicators tracked</span>
+              </div>
+              <div className="landing-fact">
+                <span className="fact-num">A–F</span>
+                <span className="fact-label">Plain-language grade for every zip</span>
+              </div>
+              <div className="landing-fact">
+                <span className="fact-num">EPA</span>
+                <span className="fact-label">Data sourced from EJScreen</span>
+              </div>
             </div>
-            <p className="grade-key-legend">
-              {GRADE_KEY.map((g, i) => (
-                <span key={g.letter} className={rc?.grade === g.letter ? "active" : ""}>
-                  <b>{g.letter}</b> {g.label}
-                  {i < GRADE_KEY.length - 1 && " · "}
-                </span>
-              ))}
+
+            <p className="hero-disclaimer">
+              Report cards are generated by Claude, an AI model by Anthropic, using
+              data from the EPA EJScreen database. AI-generated summaries may contain
+              errors — always verify critical information with official sources.
             </p>
-            {gradeMeta && <p className="grade-key-desc">{gradeMeta.desc}.</p>}
           </div>
-
-          {/* Children's Health Index */}
-          <div className="child-index" style={{ "--child-color": childSev.color, "--child-bg": childSev.bg }}>
-            <div className="child-index-score">
-              <span className="child-num">{childScore ?? "—"}</span>
-              <span className="child-out">/ 100</span>
-            </div>
-            <div className="child-index-body">
-              <div className="child-index-title">Children's Health Index</div>
-              <p className="child-index-desc">
-                Weighted score combining lead paint exposure (40%), traffic pollution (35%), and air toxics cancer risk (25%) — the three indicators most linked to childhood health outcomes. Higher = more risk.
-              </p>
-            </div>
-          </div>
-
-          {/* Indicator cards */}
-          <div className="section">
-            <h3>Environmental indicators</h3>
-            <div className="indicator-grid">
-              {INDICATORS.map((ind, i) => {
-                const raw = data.environmental?.[ind.env];
-                const pctl = data.percentiles?.[ind.pctl];
-                const s = severity(pctl);
-                return (
-                  <div className="indicator" key={ind.env} style={{ "--i": i }}>
-                    <div className="label">{ind.label}</div>
-                    <div className="value">
-                      {fmt(raw, ind.pct)}
-                      {ind.unit && <span className="unit">{ind.unit}</span>}
-                    </div>
-                    <div className="bar">
-                      <span
-                        style={{
-                          width: `${pctl ?? 0}%`,
-                          background: s.color,
-                        }}
-                      />
-                    </div>
-                    <div className="pctile">
-                      {pctl != null ? (
-                        <>Worse than <b>{Math.round(pctl)}%</b> of the US</>
-                      ) : (
-                        "No data"
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Key findings */}
-          {rc?.key_findings?.length > 0 && (
-            <div className="section">
-              <h3>Key findings</h3>
-              {rc.key_findings.map((f, i) => (
-                <div className="list-item" key={i}>{f}</div>
-              ))}
-            </div>
-          )}
-
-          {/* Action items */}
-          {rc?.action_items?.length > 0 && (
-            <div className="section">
-              <h3>What you can do</h3>
-              {rc.action_items.map((a, i) => (
-                <div className="list-item action" key={i}>{a}</div>
-              ))}
-            </div>
-          )}
-
-          {/* Map with toggleable layers */}
-          {data.location && (
-            <div className="section">
-              <h3>Map &amp; layers</h3>
-
-              <div className="layer-toggles">
-                <button
-                  className={`chip air ${visible.air ? "on" : ""}`}
-                  onClick={() => toggle("air")}
-                >
-                  <span className="swatch" /> Air quality heatmap
-                </button>
-                <button
-                  className={`chip fac ${visible.facilities ? "on" : ""}`}
-                  onClick={() => toggle("facilities")}
-                >
-                  <span className="swatch" /> Industrial facilities
-                  {layers && ` (${layers.facilities.features.length})`}
-                </button>
-                <button
-                  className={`chip park ${visible.parks ? "on" : ""}`}
-                  onClick={() => toggle("parks")}
-                >
-                  <span className="swatch" /> Green spaces
-                  {layers && ` (${layers.green_spaces.features.length})`}
-                </button>
-              </div>
-
-              <div className="map-wrap">
-                <Map
-                  initialViewState={{
-                    longitude: data.location.lon,
-                    latitude: data.location.lat,
-                    zoom: 12.5,
-                  }}
-                  style={{ width: "100%", height: 440 }}
-                  mapStyle="mapbox://styles/mapbox/light-v11"
-                  mapboxAccessToken={MAPBOX_TOKEN}
-                  interactiveLayerIds={layers ? ["facilities-circle"] : []}
-                  onClick={(e) => {
-                    const feature = e.features?.[0];
-                    if (feature?.layer?.id === "facilities-circle") {
-                      setFacilityPopup({
-                        lon: feature.geometry.coordinates[0],
-                        lat: feature.geometry.coordinates[1],
-                        name: feature.properties.name,
-                        type: feature.properties.type,
-                      });
-                    } else {
-                      setFacilityPopup(null);
-                    }
-                  }}
-                  cursor={facilityPopup ? "pointer" : ""}
-                >
-                  {/* Green spaces (drawn first, underneath) */}
-                  {layers && visible.parks && (
-                    <Source id="green" type="geojson" data={layers.green_spaces}>
-                      <Layer {...greenFillLayer} />
-                      <Layer {...greenLineLayer} />
-                    </Source>
-                  )}
-
-                  {/* Air-quality heatmap */}
-                  {layers && visible.air && (
-                    <Source id="air" type="geojson" data={layers.air_quality}>
-                      <Layer {...heatmapLayer} />
-                    </Source>
-                  )}
-
-                  {/* Industrial facility markers */}
-                  {layers && visible.facilities && (
-                    <Source id="facilities" type="geojson" data={layers.facilities}>
-                      <Layer {...facilitiesLayer} />
-                    </Source>
-                  )}
-
-                  {/* Searched location pin */}
-                  <Marker
-                    longitude={data.location.lon}
-                    latitude={data.location.lat}
-                    color={dialColor}
-                  />
-
-                  {/* Facility popup */}
-                  {facilityPopup && (
-                    <Popup
-                      longitude={facilityPopup.lon}
-                      latitude={facilityPopup.lat}
-                      onClose={() => setFacilityPopup(null)}
-                      closeOnClick={false}
-                      anchor="bottom"
-                    >
-                      <div className="facility-popup">
-                        <strong className="facility-popup-name">{facilityPopup.name}</strong>
-                        <span className={`facility-popup-status ${facilityPopup.type === "Recent violation" ? "violation" : ""}`}>
-                          {facilityPopup.type}
-                        </span>
-                        <a
-                          className="facility-popup-link"
-                          href={`https://echo.epa.gov/facilities/facility-search/results?p_fn=${encodeURIComponent(facilityPopup.name)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          View on EPA ECHO
-                        </a>
-                      </div>
-                    </Popup>
-                  )}
-                </Map>
-              </div>
-
-              {layers &&
-                (layers.facilities.source === "mock" ||
-                  layers.green_spaces.source === "mock") && (
-                  <p className="map-note">
-                    Some map layers show estimated locations while the EPA and
-                    OpenStreetMap services are unavailable.
-                  </p>
-                )}
-            </div>
-          )}
-          {/* Nearby zip comparison */}
-          <div className="section">
-            <h3>How does this area compare nearby?</h3>
-            {nearbyLoading && (
-              <div className="nearby-loading">
-                <div className="skel skel-line" style={{ width: "60%", marginBottom: 10 }} />
-                <div className="skel skel-line" style={{ width: "80%", marginBottom: 10 }} />
-                <div className="skel skel-line" style={{ width: "50%" }} />
-              </div>
-            )}
-            {nearbyZips && nearbyZips.zips.length > 0 && (
-              <div className="nearby-grid">
-                {nearbyZips.zips.map((nz) => {
-                  const s = severity(nz.score);
-                  const isCurrent = nz.zip === data.zip_code;
-                  return (
-                    <button
-                      key={nz.zip}
-                      className={`nearby-card ${isCurrent ? "current" : ""}`}
-                      style={{ "--nz-color": s.color, "--nz-bg": s.bg }}
-                      onClick={() => !isCurrent && search(nz.zip)}
-                    >
-                      <span className="nearby-zip">{nz.zip}</span>
-                      <span className="nearby-grade">{nz.grade}</span>
-                      <span className="nearby-score">{nz.score}</span>
-                      {isCurrent && <span className="nearby-current-tag">current</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {nearbyZips && nearbyZips.zips.length === 0 && (
-              <p className="map-note">No nearby zip codes found for comparison.</p>
-            )}
-          </div>
+          {footer}
         </div>
       )}
 
-      <footer className="site-footer">
-        <p className="footer-attrib">
-          Environmental data: U.S. EPA EJScreen. Maps &amp; place data:{" "}
-          <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
-          Geocoding by OpenStreetMap Nominatim.
-        </p>
-        <p className="footer-legal">
-          <button type="button" onClick={() => setLegalDoc("disclaimer")}>Disclaimer</button>
-          <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => setLegalDoc("privacy")}>Privacy</button>
-          <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => setLegalDoc("terms")}>Terms</button>
-        </p>
-        <p className="footer-note">
-          For informational use only — not professional advice. Verify critical information with official sources.
-        </p>
-      </footer>
+      {/* ── Atlas: topbar + report pane + persistent map pane ───────────── */}
+      {hasSearched && (
+        <>
+          <header className="topbar">
+            <button type="button" className="topbar-logo" onClick={reset} title="Start over">
+              EJMapper
+            </button>
+            {searchBox(false)}
+            <div className="topbar-profiles" role="group" aria-label="Audience profile">
+              {PROFILES.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className={`profile-btn ${profile === p.key ? "active" : ""}`}
+                  onClick={() => {
+                    setProfile(p.key);
+                    if (data && zip) search(zip, { pushUrl: false, profileOverride: p.key });
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </header>
 
+          <div className="atlas">
+            {/* ── Left: scrolling report ─────────────────────────────────── */}
+            <div className="report-pane">
+              {error && <div className="banner error">{error}</div>}
+
+              {loading && (
+                <div className="skeleton-report">
+                  <div className="score-card skel-card">
+                    <div className="skel skel-dial" />
+                    <div className="score-body">
+                      <div className="skel skel-line" style={{ width: "55%", marginBottom: 12 }} />
+                      <div className="skel skel-line" style={{ width: "90%", marginBottom: 6 }} />
+                      <div className="skel skel-line" style={{ width: "70%" }} />
+                    </div>
+                  </div>
+                  <div className="grade-key skel-card">
+                    <div className="skel skel-line" style={{ width: "30%", marginBottom: 16 }} />
+                    <div className="skel" style={{ height: 8, borderRadius: 999, marginBottom: 12 }} />
+                    <div className="skel skel-line" style={{ width: "80%" }} />
+                  </div>
+                  <div className="section">
+                    <div className="skel skel-heading" />
+                    <div className="indicator-grid">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div className="skel-ind" key={i}>
+                          <div className="skel skel-line" style={{ width: "70%", marginBottom: 14 }} />
+                          <div className="skel skel-line" style={{ width: "40%", height: 22, marginBottom: 14 }} />
+                          <div className="skel" style={{ height: 5, borderRadius: 999, marginBottom: 10 }} />
+                          <div className="skel skel-line" style={{ width: "60%" }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {data && !loading && (
+                <div className="report" key={`${data.zip_code}-${profile}`}>
+                  {data.data_source === "mock" && (
+                    <div className="banner mock">
+                      Showing estimated data — the EPA EJScreen service is temporarily offline.
+                    </div>
+                  )}
+
+                  {/* Score hero */}
+                  <div
+                    className="score-card"
+                    style={{ "--sev-color": dialColor, "--sev-bg": dialBg }}
+                  >
+                    <div className="score-dial">
+                      <span className="num">{displayScore ?? "—"}</span>
+                      <span className="out-of">out of 100</span>
+                    </div>
+                    <div className="score-body">
+                      <div className="zip-line">
+                        <h2>Zip code {data.zip_code}</h2>
+                        {rc?.grade && <span className="grade-pill">Grade {rc.grade}</span>}
+                      </div>
+                      <p className="summary">{rc?.summary}</p>
+                      <div className="score-actions">
+                        <button type="button" className="mini-btn" onClick={share}>
+                          {shareMsg ?? "Share this report"}
+                        </button>
+                        <button
+                          type="button"
+                          className={`mini-btn ${pinned?.zip === data.zip_code ? "on" : ""}`}
+                          onClick={togglePin}
+                        >
+                          {pinned?.zip === data.zip_code ? "Unpin comparison" : "Pin to compare"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {comparing && (
+                    <div className="compare-strip">
+                      <span>
+                        Comparing with <b>{pinned.zip}</b> — score {pinned.score ?? "—"}, grade{" "}
+                        {pinned.grade ?? "—"}. Thin bars below show {pinned.zip}.
+                      </span>
+                      <button type="button" onClick={() => setPinned(null)}>Unpin</button>
+                    </div>
+                  )}
+
+                  {/* Grade key — gradient scale with the current grade marked */}
+                  <div className="grade-key">
+                    <span className="grade-key-title">What the grade means</span>
+                    <div className="grade-scale">
+                      <div className="grade-scale-track" style={{ background: gradeGradient }}>
+                        {gradeIndex >= 0 && (
+                          <span
+                            className="grade-scale-marker"
+                            style={{ left: `${(gradeIndex / (GRADE_KEY.length - 1)) * 100}%` }}
+                          >
+                            {rc.grade}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grade-scale-ticks">
+                        {GRADE_KEY.map((g) => (
+                          <span
+                            key={g.letter}
+                            className={`grade-scale-tick ${rc?.grade === g.letter ? "active" : ""}`}
+                          >
+                            {g.letter}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="grade-key-legend">
+                      {GRADE_KEY.map((g, i) => (
+                        <span key={g.letter} className={rc?.grade === g.letter ? "active" : ""}>
+                          <b>{g.letter}</b> {g.label}
+                          {i < GRADE_KEY.length - 1 && " · "}
+                        </span>
+                      ))}
+                    </p>
+                    {gradeMeta && <p className="grade-key-desc">{gradeMeta.desc}.</p>}
+                  </div>
+
+                  {/* Children's Health Index */}
+                  <div
+                    className="child-index"
+                    style={{ "--child-color": childSev.color, "--child-bg": childSev.bg }}
+                  >
+                    <div className="child-index-score">
+                      <span className="child-num">{childScore ?? "—"}</span>
+                      <span className="child-out">/ 100</span>
+                    </div>
+                    <div className="child-index-body">
+                      <div className="child-index-title">Children's Health Index</div>
+                      <p className="child-index-desc">
+                        Weighted score combining lead paint exposure (40%), traffic pollution
+                        (35%), and air toxics cancer risk (25%) — the three indicators most
+                        linked to childhood health outcomes. Higher = more risk.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Indicator cards — click to expand a plain-language explainer */}
+                  <div className="section">
+                    <h3>Environmental indicators</h3>
+                    <p className="section-hint">Select any measure to learn what it means.</p>
+                    <div className="indicator-grid">
+                      {INDICATORS.map((ind, i) => {
+                        const raw = data.environmental?.[ind.env];
+                        const pctl = data.percentiles?.[ind.pctl];
+                        const pinPctl = comparing ? pinned.percentiles?.[ind.pctl] : null;
+                        const s = severity(pctl);
+                        const open = openInd === ind.env;
+                        return (
+                          <button
+                            type="button"
+                            className={`indicator ${open ? "open" : ""}`}
+                            key={ind.env}
+                            style={{ "--i": i }}
+                            aria-expanded={open}
+                            onClick={() => setOpenInd(open ? null : ind.env)}
+                          >
+                            <div className="label">{ind.label}</div>
+                            <div className="value">
+                              {fmt(raw, ind.pct)}
+                              {ind.unit && <span className="unit">{ind.unit}</span>}
+                            </div>
+                            <div className="bar">
+                              <span style={{ width: `${pctl ?? 0}%`, background: s.color }} />
+                            </div>
+                            {comparing && (
+                              <div className="bar compare">
+                                <span style={{ width: `${pinPctl ?? 0}%` }} />
+                              </div>
+                            )}
+                            <div className="pctile">
+                              {pctl != null ? (
+                                <>Worse than <b>{Math.round(pctl)}%</b> of the US</>
+                              ) : (
+                                "No data"
+                              )}
+                              <span className="ind-more">{open ? "Less" : "More"}</span>
+                            </div>
+                            {open && <p className="ind-desc">{ind.desc}</p>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Key findings */}
+                  {rc?.key_findings?.length > 0 && (
+                    <div className="section">
+                      <h3>Key findings</h3>
+                      {rc.key_findings.map((f, i) => (
+                        <div className="list-item" key={i}>{f}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Action items */}
+                  {rc?.action_items?.length > 0 && (
+                    <div className="section">
+                      <h3>What you can do</h3>
+                      {rc.action_items.map((a, i) => (
+                        <div className="list-item action" key={i}>{a}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Nearby zip comparison */}
+                  <div className="section">
+                    <h3>How does this area compare nearby?</h3>
+                    {nearbyLoading && (
+                      <div className="nearby-loading">
+                        <div className="skel skel-line" style={{ width: "60%", marginBottom: 10 }} />
+                        <div className="skel skel-line" style={{ width: "80%", marginBottom: 10 }} />
+                        <div className="skel skel-line" style={{ width: "50%" }} />
+                      </div>
+                    )}
+                    {nearbyZips && nearbyZips.zips.length > 0 && (
+                      <div className="nearby-grid">
+                        {nearbyZips.zips.map((nz) => {
+                          const s = severity(nz.score);
+                          const isCurrent = nz.zip === data.zip_code;
+                          return (
+                            <button
+                              key={nz.zip}
+                              className={`nearby-card ${isCurrent ? "current" : ""}`}
+                              style={{ "--nz-color": s.color, "--nz-bg": s.bg }}
+                              onClick={() => !isCurrent && search(nz.zip)}
+                            >
+                              <span className="nearby-zip">{nz.zip}</span>
+                              <span className="nearby-grade">{nz.grade}</span>
+                              <span className="nearby-score">{nz.score}</span>
+                              {isCurrent && <span className="nearby-current-tag">current</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {nearbyZips && nearbyZips.zips.length === 0 && (
+                      <p className="map-note">No nearby zip codes found for comparison.</p>
+                    )}
+                  </div>
+
+                  <p className="ai-note">
+                    Summary and findings are AI-generated from EPA data and may contain
+                    errors. Verify important details with official sources.
+                  </p>
+                </div>
+              )}
+
+              {footer}
+            </div>
+
+            {/* ── Right: persistent full-height map ──────────────────────── */}
+            <div className="map-pane">
+              {mapCenter ? (
+                <>
+                  <Map
+                    ref={mapRef}
+                    initialViewState={{
+                      longitude: mapCenter.lon,
+                      latitude: mapCenter.lat,
+                      zoom: 12.5,
+                    }}
+                    style={{ width: "100%", height: "100%" }}
+                    mapStyle="mapbox://styles/mapbox/light-v11"
+                    mapboxAccessToken={MAPBOX_TOKEN}
+                    interactiveLayerIds={layers ? ["facilities-circle"] : []}
+                    onClick={(e) => {
+                      const feature = e.features?.[0];
+                      if (feature?.layer?.id === "facilities-circle") {
+                        setFacilityPopup({
+                          lon: feature.geometry.coordinates[0],
+                          lat: feature.geometry.coordinates[1],
+                          name: feature.properties.name,
+                          type: feature.properties.type,
+                        });
+                      } else {
+                        setFacilityPopup(null);
+                      }
+                    }}
+                    cursor={facilityPopup ? "pointer" : ""}
+                  >
+                    {layers && visible.parks && (
+                      <Source id="green" type="geojson" data={layers.green_spaces}>
+                        <Layer {...greenFillLayer} />
+                        <Layer {...greenLineLayer} />
+                      </Source>
+                    )}
+                    {layers && visible.air && (
+                      <Source id="air" type="geojson" data={layers.air_quality}>
+                        <Layer {...heatmapLayer} />
+                      </Source>
+                    )}
+                    {layers && visible.facilities && (
+                      <Source id="facilities" type="geojson" data={layers.facilities}>
+                        <Layer {...facilitiesLayer} />
+                      </Source>
+                    )}
+                    <Marker longitude={mapCenter.lon} latitude={mapCenter.lat} color={dialColor} />
+                    {facilityPopup && (
+                      <Popup
+                        longitude={facilityPopup.lon}
+                        latitude={facilityPopup.lat}
+                        onClose={() => setFacilityPopup(null)}
+                        closeOnClick={false}
+                        anchor="bottom"
+                      >
+                        <div className="facility-popup">
+                          <strong className="facility-popup-name">{facilityPopup.name}</strong>
+                          <span className={`facility-popup-status ${facilityPopup.type === "Recent violation" ? "violation" : ""}`}>
+                            {facilityPopup.type}
+                          </span>
+                          <a
+                            className="facility-popup-link"
+                            href={`https://echo.epa.gov/facilities/facility-search/results?p_fn=${encodeURIComponent(facilityPopup.name)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            View on EPA ECHO
+                          </a>
+                        </div>
+                      </Popup>
+                    )}
+                  </Map>
+
+                  {/* Overlays */}
+                  {data && rc?.grade && (
+                    <div className="map-badge" style={{ "--badge-color": dialColor }}>
+                      <span className="map-badge-zip">{data.zip_code}</span>
+                      <span className="map-badge-grade">{rc.grade}</span>
+                    </div>
+                  )}
+                  <div className="map-chips">
+                    <button
+                      className={`chip air ${visible.air ? "on" : ""}`}
+                      onClick={() => toggle("air")}
+                    >
+                      <span className="swatch" /> Air quality
+                    </button>
+                    <button
+                      className={`chip fac ${visible.facilities ? "on" : ""}`}
+                      onClick={() => toggle("facilities")}
+                    >
+                      <span className="swatch" /> Facilities
+                      {layers && ` (${layers.facilities.features.length})`}
+                    </button>
+                    <button
+                      className={`chip park ${visible.parks ? "on" : ""}`}
+                      onClick={() => toggle("parks")}
+                    >
+                      <span className="swatch" /> Green spaces
+                      {layers && ` (${layers.green_spaces.features.length})`}
+                    </button>
+                  </div>
+                  {layers &&
+                    (layers.facilities.source === "mock" ||
+                      layers.green_spaces.source === "mock") && (
+                      <p className="map-mock-note">
+                        Some layers show estimated locations while EPA / OpenStreetMap
+                        services are unavailable.
+                      </p>
+                    )}
+                </>
+              ) : (
+                <div className="map-skeleton">
+                  <div className="skel" style={{ width: "100%", height: "100%", borderRadius: 0 }} />
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Legal modal ─────────────────────────────────────────────────── */}
       {legalDoc && (
         <div
           className="legal-overlay"
