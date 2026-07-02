@@ -16,7 +16,9 @@ async def zip_to_latlon(zip_code: str) -> tuple[float, float]:
         results = resp.json()
 
     if not results:
-        raise ValueError(f"Could not find coordinates for zip code {zip_code}.")
+        # Keep the message generic — callers translate this to a clean 404, and
+        # user input stays out of exception text that may reach logs/tracebacks.
+        raise ValueError("Zip code could not be geocoded.")
     return float(results[0]["lat"]), float(results[0]["lon"])
 
 

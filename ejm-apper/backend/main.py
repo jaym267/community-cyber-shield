@@ -159,12 +159,17 @@ async def health():
 # ── Nearby-zip comparison route ───────────────────────────────────────────────
 
 @app.get("/api/nearby-zips/{zip_code}")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def nearby_zips_endpoint(request: Request, zip_code: str):
     """
     Return up to 6 nearby zip codes with quick environmental scores for comparison.
-    Samples 4 cardinal directions at ~3 miles, reverse-geocodes to zip codes,
-    fetches EJScreen data for each, and returns them sorted cleanest to most burdened.
+    Samples 6 points ~3 miles out, reverse-geocodes each to a zip code (staggered
+    1.1s apart to respect Nominatim's 1 req/s policy), scores each unique zip via
+    EJScreen, and returns them sorted cleanest to most burdened.
+
+    Upstream fan-out is bounded at 6 Nominatim + 6 EJScreen calls per uncached
+    request: each sample point's own coordinates are reused for scoring, so found
+    zips are never geocoded a second time.
     """
     require_zip(zip_code)
 
@@ -197,16 +202,22 @@ async def nearby_zips_endpoint(request: Request, zip_code: str):
         return_exceptions=True,
     )
 
+    # Pair each result with the sample point that produced it — that point's
+    # coordinates are good enough to score the zip without geocoding it again.
     seen = {zip_code}
-    unique = []
-    for z in raw_zips:
-        if isinstance(z, str) and z and z.isdigit() and len(z) == 5 and z not in seen:
+    candidates = []  # (zip, lat, lon)
+    for (plat, plon), z in zip(sample_points, raw_zips):
+        if isinstance(z, str) and z.isdigit() and len(z) == 5 and z not in seen:
             seen.add(z)
-            unique.append(z)
+            candidates.append((z, plat, plon))
+    if not candidates:
+        logger.warning(
+            "nearby-zips: 0/%d sample points resolved to a new zip for %s",
+            len(sample_points), zip_code,
+        )
 
-    async def score_zip(z: str):
+    async def score_zip(z: str, zlat: float, zlon: float):
         try:
-            zlat, zlon = await zip_to_latlon(z)
             try:
                 ej = await get_ejscreen_data(zlat, zlon, radius_miles=1.0)
             except Exception:
@@ -218,7 +229,7 @@ async def nearby_zips_endpoint(request: Request, zip_code: str):
         except Exception:
             return None
 
-    scored = await asyncio.gather(*[score_zip(z) for z in unique[:6]])
+    scored = await asyncio.gather(*[score_zip(z, la, lo) for z, la, lo in candidates])
     zips = sorted([r for r in scored if r], key=lambda x: x["score"])
 
     result = {"zips": zips, "center_zip": zip_code}
