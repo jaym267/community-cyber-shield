@@ -20,3 +20,9 @@ services:
       # needed for custom domains.
       - key: ALLOWED_ORIGINS
         sync: false
+      # US Census Bureau API key for the heat-vulnerability demographics
+      # (free, instant: api.census.gov/data/key_signup.html). The Census API
+      # now rejects keyless requests, so without this the ACS component of
+      # /api/heat-vulnerability serves clearly-labeled mock data.
+      - key: CENSUS_API_KEY
+        sync: false

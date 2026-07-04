@@ -41,6 +41,29 @@ EJMapper is an AI-powered web app that shows you the environmental health of any
 | OSM Overpass    | Parks and green space                   | No           |
 | NASA POWER      | Heat layer: 30-day avg daily max **air** temperature per San Antonio-area zip (`/api/heat`), bilinearly interpolated between POWER's ~50 km grid cells. Air temperature, not satellite land-surface temperature. | No |
 | NLCD / MRLC     | Tree canopy layer (`/api/canopy`): mean NLCD Tree Canopy Cover 2021 per SA zip, computed offline via MRLC's public WCS and committed as a static dataset. Static estimates, 2021 vintage. | No |
+| Census ACS 5-yr | Heat-vulnerability demographics (`/api/heat-vulnerability`): % population 65+, median household income, median housing year built, per ZCTA (2023 vintage). | Yes (free, instant: api.census.gov/data/key_signup.html — set `CENSUS_API_KEY`; without it this component serves labeled mock data) |
+
+### Heat vulnerability score (`/api/heat-vulnerability`)
+
+Composite 0–100 score per San Antonio-area zip. Each component is min-max
+normalized 0–1 **across the SA zip set**, inverted where needed so 1 = more
+vulnerable, then weighted and summed:
+
+| Component | Weight | Direction |
+|-----------|--------|-----------|
+| Avg daily max air temp (NASA POWER, interpolated) | 0.30 | hotter → riskier |
+| Tree canopy % (NLCD 2021) | 0.25 | less canopy → riskier |
+| % population 65+ (ACS) | 0.15 | older → riskier |
+| Median household income (ACS) | 0.15 | poorer → riskier |
+| Median year housing built (ACS) | 0.15 | older housing → riskier |
+
+Temperature + canopy are the physical urban-heat-island drivers (55%
+combined); the ACS terms are sensitivity/adaptive-capacity modifiers (45%),
+loosely following CDC heat-vulnerability-index practice. If a zip is missing
+a component, weights renormalize over the available ones — missing data never
+silently counts as zero risk. Caveats: air temperature (not satellite land-
+surface temperature), ~50 km grid bilinearly interpolated; canopy is a static
+2021 estimate; ZCTAs approximate but don't exactly match USPS zips.
 
 ---
 

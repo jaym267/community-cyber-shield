@@ -34,8 +34,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from census_api import zip_to_latlon, latlon_to_zip
 from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
+from acs_api import generate_mock_acs, get_acs_zcta_data
 from canopy_data import get_canopy_data
-from heat_api import get_heat_data
+from heat_api import get_heat_data, load_sa_zips
+from heat_vulnerability import WEIGHTS, compute_vulnerability
 from mock_data import generate_mock_ejscreen
 
 logger = logging.getLogger("ejmapper")
@@ -548,6 +550,80 @@ async def heat_endpoint(request: Request):
     result = await get_heat_data()
     ttl = _CACHE_TTL_SECONDS if result["source"] == "live" else _CACHE_TTL_MOCK_SECONDS
     cache_set(cache_key, result, ttl=ttl)
+    return result
+
+
+async def _heat_cached() -> dict:
+    """The /api/heat payload via the shared cache (same key/TTL as the route)."""
+    cached = cache_get("heat:sa")
+    if cached is not None:
+        return cached
+    result = await get_heat_data()
+    ttl = _CACHE_TTL_SECONDS if result["source"] == "live" else _CACHE_TTL_MOCK_SECONDS
+    cache_set("heat:sa", result, ttl=ttl)
+    return result
+
+
+async def _acs_cached() -> dict:
+    """ACS demographics for the SA zip set, cached; labeled mock on failure."""
+    cached = cache_get("acs:sa")
+    if cached is not None:
+        return cached
+    zctas = [z["zip"] for z in load_sa_zips()]
+    try:
+        data = await get_acs_zcta_data(zctas)
+        source = "live"
+    except Exception as e:
+        logger.warning("ACS unavailable (%r) — serving mock demographics", e)
+        data = generate_mock_acs(zctas)
+        source = "mock"
+    result = {"zips": data, "source": source}
+    ttl = _CACHE_TTL_SECONDS if source == "live" else _CACHE_TTL_MOCK_SECONDS
+    cache_set("acs:sa", result, ttl=ttl)
+    return result
+
+
+# ── Heat-vulnerability route (composite score, San Antonio region) ────────────
+# score = weighted sum of SA-set-normalized components; see
+# heat_vulnerability.py for the documented formula, weights, and the
+# missing-component renormalization rule.
+
+@app.get("/api/heat-vulnerability")
+@limiter.limit("20/minute")
+async def heat_vulnerability_endpoint(request: Request):
+    """Composite heat-vulnerability score per San Antonio-area zip."""
+    cache_key = "heat-vuln:sa"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        logger.info("cache HIT %s", cache_key)
+        return cached
+    logger.info("cache MISS %s", cache_key)
+
+    heat = await _heat_cached()
+    canopy = get_canopy_data()
+    acs = await _acs_cached()
+    all_zips = [z["zip"] for z in load_sa_zips()]
+
+    result = {
+        "region": "san_antonio",
+        "weights": WEIGHTS,
+        "formula_note": (
+            "Each component is min-max normalized 0-1 across the San Antonio "
+            "zip set, inverted where needed so 1 = more vulnerable, then "
+            "weighted and summed; weights renormalize over available "
+            "components when data is missing."
+        ),
+        "zips": compute_vulnerability(heat["zips"], canopy["zips"], acs["zips"], all_zips),
+        "sources": {
+            "heat": heat["source"],
+            "canopy": canopy["source"],
+            "acs": acs["source"],
+        },
+    }
+    all_good = (heat["source"] == "live" and acs["source"] == "live"
+                and canopy["source"] == "static_estimate")
+    cache_set(cache_key, result,
+              ttl=_CACHE_TTL_SECONDS if all_good else _CACHE_TTL_MOCK_SECONDS)
     return result
 
 
