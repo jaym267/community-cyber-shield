@@ -34,6 +34,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from census_api import zip_to_latlon, latlon_to_zip
 from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
+from heat_api import get_heat_data
 from mock_data import generate_mock_ejscreen
 
 logger = logging.getLogger("ejmapper")
@@ -524,6 +525,28 @@ async def live_conditions(request: Request, zip_code: str):
     }
     # Live data goes stale fast — 15 minutes, matching Open-Meteo's update cadence.
     cache_set(cache_key, result, ttl=15 * 60)
+    return result
+
+
+# ── Heat layer route (NASA POWER air temperature, San Antonio region) ─────────
+# Region-scoped (Bexar County, ~70 zips), not per-zip: one dataset computed
+# once and cached under one key. See heat_api.py for the honesty notes about
+# air-temp-vs-LST and POWER's ~50 km grid resolution.
+
+@app.get("/api/heat")
+@limiter.limit("20/minute")
+async def heat_endpoint(request: Request):
+    """30-day avg daily max air temperature per San Antonio-area zip."""
+    cache_key = "heat:sa"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        logger.info("cache HIT %s", cache_key)
+        return cached
+    logger.info("cache MISS %s", cache_key)
+
+    result = await get_heat_data()
+    ttl = _CACHE_TTL_SECONDS if result["source"] == "live" else _CACHE_TTL_MOCK_SECONDS
+    cache_set(cache_key, result, ttl=ttl)
     return result
 
 
