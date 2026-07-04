@@ -39,7 +39,8 @@ EJMapper is an AI-powered web app that shows you the environmental health of any
 | EPA ECHO        | Industrial facility violations          | No           |
 | CDC PLACES      | Health outcome rates by zip code        | No           |
 | OSM Overpass    | Parks and green space                   | No           |
-| NASA POWER      | Heat layer: 30-day avg daily max **air** temperature per San Antonio-area zip (`/api/heat`). ~50 km grid, so adjacent zips share values; this is air temperature, not satellite land-surface temperature. | No |
+| NASA POWER      | Heat layer: 30-day avg daily max **air** temperature per San Antonio-area zip (`/api/heat`), bilinearly interpolated between POWER's ~50 km grid cells. Air temperature, not satellite land-surface temperature. | No |
+| NLCD / MRLC     | Tree canopy layer (`/api/canopy`): mean NLCD Tree Canopy Cover 2021 per SA zip, computed offline via MRLC's public WCS and committed as a static dataset. Static estimates, 2021 vintage. | No |
 
 ---
 

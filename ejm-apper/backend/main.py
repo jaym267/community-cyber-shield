@@ -34,6 +34,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from census_api import zip_to_latlon, latlon_to_zip
 from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
+from canopy_data import get_canopy_data
 from heat_api import get_heat_data
 from mock_data import generate_mock_ejscreen
 
@@ -548,6 +549,16 @@ async def heat_endpoint(request: Request):
     ttl = _CACHE_TTL_SECONDS if result["source"] == "live" else _CACHE_TTL_MOCK_SECONDS
     cache_set(cache_key, result, ttl=ttl)
     return result
+
+
+# ── Canopy layer route (static NLCD-derived estimates, San Antonio region) ────
+
+@app.get("/api/canopy")
+@limiter.limit("20/minute")
+async def canopy_endpoint(request: Request):
+    """Tree canopy % per San Antonio-area zip (NLCD TCC 2021 zonal means)."""
+    # Static committed data — lru_cache inside get_canopy_data, no TTL needed.
+    return get_canopy_data()
 
 
 # ── Map layers route (heatmap + facilities + green space as GeoJSON) ──────────
