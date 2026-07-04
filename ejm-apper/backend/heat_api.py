@@ -7,11 +7,12 @@ Serves the /api/heat layer: a 30-day average of daily MAXIMUM AIR temperature
 Honesty notes baked into the design:
   - This is AIR temperature at 2 meters, NOT satellite land-surface temperature.
     The response's metric_note says so; the frontend must repeat it.
-  - POWER's native grid is ~0.5° lat x 0.625° lon (~50 km). All of Bexar County
-    spans only a handful of grid cells, so adjacent zips legitimately share the
-    same value. We therefore fetch each UNIQUE grid cell once and assign the
-    cell's value to every zip inside it — identical numbers across neighboring
-    zips are the data's real resolution, not a bug.
+  - POWER's native grid is ~0.5° lat x 0.625° lon (~50 km). To avoid a blocky
+    map, each zip's value is BILINEARLY INTERPOLATED from the four surrounding
+    grid-cell centers — the standard way to read a point value out of gridded
+    climate data (POWER itself is an interpolated reanalysis product). The
+    smooth zip-to-zip variation is therefore real-data-derived, but the
+    underlying measurement resolution is still ~50 km, and metric_note says so.
 
 NASA POWER is free, keyless, and public (power.larc.nasa.gov). Daily data lags
 real time by ~2-7 days, so the 30-day window ends 7 days before today.
@@ -44,11 +45,25 @@ def load_sa_zips() -> tuple[dict, ...]:
     return tuple(raw["zips"])
 
 
-def _grid_key(lat: float, lon: float) -> tuple[float, float]:
-    """Snap a point to the center of its POWER grid cell."""
-    glat = round((lat // _GRID_LAT) * _GRID_LAT + _GRID_LAT / 2, 3)
-    glon = round((lon // _GRID_LON) * _GRID_LON + _GRID_LON / 2, 3)
-    return (glat, glon)
+def _corner_cells(lat: float, lon: float) -> list[tuple[tuple[float, float], float]]:
+    """
+    The four POWER grid-cell centers surrounding a point, each paired with its
+    bilinear interpolation weight (weights sum to 1). Cell centers sit on a
+    lattice at k*0.5 + 0.25 (lat) and m*0.625 + 0.3125 (lon).
+    """
+    import math
+    lat0 = math.floor((lat - _GRID_LAT / 2) / _GRID_LAT) * _GRID_LAT + _GRID_LAT / 2
+    lon0 = math.floor((lon - _GRID_LON / 2) / _GRID_LON) * _GRID_LON + _GRID_LON / 2
+    lat1, lon1 = lat0 + _GRID_LAT, lon0 + _GRID_LON
+    ty = (lat - lat0) / _GRID_LAT
+    tx = (lon - lon0) / _GRID_LON
+    r3 = lambda v: round(v, 4)
+    return [
+        ((r3(lat0), r3(lon0)), (1 - ty) * (1 - tx)),
+        ((r3(lat0), r3(lon1)), (1 - ty) * tx),
+        ((r3(lat1), r3(lon0)), ty * (1 - tx)),
+        ((r3(lat1), r3(lon1)), ty * tx),
+    ]
 
 
 def _window() -> tuple[str, str]:
@@ -99,50 +114,61 @@ def generate_mock_heat(zips: tuple[dict, ...]) -> dict[str, float]:
 
 async def get_heat_data() -> dict:
     """
-    Build the /api/heat payload. Fetches each unique POWER grid cell covering
-    the SA zip set (bounded concurrency), assigns cell averages to member zips,
-    and falls back to seeded mock values per failed cell — or entirely, if
-    every cell fails. `source` is "live", "mock", or "mixed".
+    Build the /api/heat payload. Collects the unique POWER grid cells that
+    surround the SA zip centroids (each zip needs its 4 bilinear corners),
+    fetches every unique cell once (bounded concurrency), then bilinearly
+    interpolates each zip's temperature from whichever of its corners
+    succeeded (weights renormalized over available corners). Zips with no
+    live corner fall back to seeded mock values. `source` is "live", "mock",
+    or "mixed".
     """
     zips = load_sa_zips()
     start, end = _window()
 
-    cells: dict[tuple[float, float], list[str]] = {}
-    for z in zips:
-        cells.setdefault(_grid_key(z["lat"], z["lon"]), []).append(z["zip"])
+    # Every unique corner cell needed by any zip.
+    corners_by_zip = {z["zip"]: _corner_cells(z["lat"], z["lon"]) for z in zips}
+    unique_cells = sorted({cell for corners in corners_by_zip.values()
+                           for cell, _w in corners})
 
     sem = asyncio.Semaphore(4)
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         results = await asyncio.gather(
             *[_fetch_power_cell(client, sem, glat, glon, start, end)
-              for (glat, glon) in cells],
+              for (glat, glon) in unique_cells],
             return_exceptions=True,
         )
 
+    cell_vals: dict[tuple[float, float], float] = {}
+    for cell, res in zip(unique_cells, results):
+        if isinstance(res, BaseException):
+            logger.warning("POWER cell %s failed: %r", cell, res)
+        elif res is not None:
+            cell_vals[cell] = res
+
     mock_vals = generate_mock_heat(zips)
     zip_temps: dict[str, float] = {}
-    live_cells = failed_cells = 0
-    for (cell, members), res in zip(cells.items(), results):
-        if isinstance(res, BaseException) or res is None:
-            failed_cells += 1
-            if isinstance(res, BaseException):
-                logger.warning("POWER cell %s failed: %r", cell, res)
-            for zc in members:
-                zip_temps[zc] = mock_vals[zc]
+    live_zips = mock_zips = 0
+    for z in zips:
+        avail = [(cell_vals[cell], w) for cell, w in corners_by_zip[z["zip"]]
+                 if cell in cell_vals and w > 0]
+        wsum = sum(w for _v, w in avail)
+        if wsum > 0:
+            zip_temps[z["zip"]] = round(sum(v * w for v, w in avail) / wsum, 1)
+            live_zips += 1
         else:
-            live_cells += 1
-            for zc in members:
-                zip_temps[zc] = res
+            zip_temps[z["zip"]] = mock_vals[z["zip"]]
+            mock_zips += 1
 
-    source = "live" if failed_cells == 0 else ("mock" if live_cells == 0 else "mixed")
+    source = "live" if mock_zips == 0 else ("mock" if live_zips == 0 else "mixed")
     iso = lambda s: f"{s[:4]}-{s[4:6]}-{s[6:]}"
     return {
         "region": "san_antonio",
         "metric": "avg_daily_max_air_temp_f",
         "metric_note": (
             "30-day average of daily maximum AIR temperature (NASA POWER "
-            "T2M_MAX, ~50 km grid) — not land-surface temperature. Adjacent "
-            "zips share values at this grid resolution."
+            "T2M_MAX) — not land-surface temperature. Values are bilinearly "
+            "interpolated between POWER's ~50 km grid cells; fine zip-to-zip "
+            "differences are smoothed estimates, not station measurements."
         ),
         "period_start": iso(start),
         "period_end": iso(end),
