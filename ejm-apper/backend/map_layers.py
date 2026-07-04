@@ -74,21 +74,13 @@ def air_quality_geojson(
             "geometry": {"type": "Point", "coordinates": [plon, plat]},
             "properties": {"weight": round(weight, 3)},
         })
-    return {"type": "FeatureCollection", "features": features}
+    # source "modeled": this layer is ALWAYS an illustrative gradient derived
+    # from the area-wide percentile — never station measurements. The frontend
+    # must label it as modeled so users don't read hotspots as measured data.
+    return {"type": "FeatureCollection", "features": features, "source": "modeled"}
 
 
 # ── 2. Industrial facility markers (EPA ECHO) ─────────────────────────────────
-
-_FACILITY_TYPES = [
-    "Metal finishing plant",
-    "Auto body / paint shop",
-    "Concrete batch plant",
-    "Chemical storage facility",
-    "Power generation station",
-    "Waste transfer station",
-    "Petroleum bulk storage",
-    "Industrial laundry",
-]
 
 
 async def facilities_geojson(lat: float, lon: float, radius_miles: float = 1.5) -> dict:
@@ -134,6 +126,13 @@ async def facilities_geojson(lat: float, lon: float, radius_miles: float = 1.5) 
 
 
 def _mock_facilities(lat: float, lon: float, radius_miles: float) -> dict:
+    """
+    Fallback when EPA ECHO is unreachable. Deliberately generic: mock features
+    must never look like real findings, so no invented facility names, no
+    invented compliance statuses ("Recent violation"), and the frontend hides
+    the EPA ECHO lookup link for them. They only convey "regulated facilities
+    typically exist in an area like this" — nothing more specific.
+    """
     rng = _rng(lat, lon, salt=2)
     n = rng.randint(5, 9)
     features = []
@@ -148,8 +147,8 @@ def _mock_facilities(lat: float, lon: float, radius_miles: float) -> dict:
                 "coordinates": [lon + dlon * math.cos(theta), lat + dlat * math.sin(theta)],
             },
             "properties": {
-                "name": f"{rng.choice(_FACILITY_TYPES)} #{i + 1}",
-                "type": rng.choice(["Active", "Active", "Recent violation"]),
+                "name": "Estimated facility location",
+                "type": "Estimated",
                 "source": "mock",
             },
         })
@@ -227,6 +226,6 @@ def _mock_green_spaces(lat: float, lon: float, radius_miles: float) -> dict:
         features.append({
             "type": "Feature",
             "geometry": {"type": "Polygon", "coordinates": [ring]},
-            "properties": {"name": f"Park #{i + 1}", "source": "mock"},
+            "properties": {"name": "Estimated green area", "source": "mock"},
         })
     return {"type": "FeatureCollection", "features": features, "source": "mock"}

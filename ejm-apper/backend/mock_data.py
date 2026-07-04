@@ -35,32 +35,34 @@ DEMO_KEYS = list(DEMO_FIELDS.values())            #  6 demographic fraction keys
 # air-toxics cancer risk, and a low-income, majority-minority population.
 MOCK_78207 = {
     "environmental": {
-        "pm25_avg_ugm3":              9.8,     # μg/m³ — above the WHO 5 μg/m³ guideline
-        "ozone_ppb":                  62.0,    # ppb — summer average
-        "diesel_pm_ugm3":             0.71,    # μg/m³ — elevated near highways/rail
-        "air_toxics_cancer_risk":     46.0,    # lifetime cancer risk per million
-        "air_toxics_resp_hazard":     0.62,    # respiratory hazard index
-        "traffic_proximity":          1900.0,  # AADT-weighted vehicles/meter
-        "lead_paint_pct":             0.78,    # fraction of homes built pre-1960
-        "superfund_proximity":        0.21,    # NPL sites / km²
-        "rmp_facility_proximity":     1.4,     # RMP facilities / km²
-        "hazwaste_proximity":         3.2,     # TSDF sites / km²
-        "underground_storage_tanks":  8.6,     # UST + LUST count / km²
-        "wastewater_discharge":       0.34,    # toxicity-weighted effluent
+        "pm25_avg_ugm3":               9.8,     # μg/m³ — above the WHO 5 μg/m³ guideline
+        "ozone_ppb":                   62.0,    # ppb — summer average
+        "no2_ppb":                     18.5,    # ppb — annual average, traffic corridor
+        "diesel_pm_ugm3":              0.71,    # μg/m³ — elevated near highways/rail
+        "toxic_releases_air":          2400.0,  # RSEI toxicity-weighted air releases index
+        "traffic_proximity":           1900.0,  # distance-weighted daily traffic index
+        "lead_paint_pct":              0.78,    # fraction of homes built pre-1960
+        "superfund_proximity":         0.21,    # NPL sites / km²
+        "rmp_facility_proximity":      1.4,     # RMP facilities / km²
+        "hazwaste_proximity":          3.2,     # TSDF sites / km²
+        "underground_storage_tanks":   8.6,     # UST + LUST count / km²
+        "wastewater_discharge":        0.34,    # toxicity-weighted effluent
+        "drinking_water_noncompliance": 1.1,    # drinking water non-compliance index
     },
     "percentiles": {
-        "pm25_pctile_national":       72.0,
-        "ozone_pctile_national":      68.0,
-        "diesel_pm_pctile_national":  88.0,
-        "cancer_risk_pctile_national": 84.0,
-        "resp_hazard_pctile_national": 80.0,
-        "traffic_pctile_national":    91.0,
-        "lead_paint_pctile_national": 94.0,
-        "superfund_pctile_national":  76.0,
-        "rmp_pctile_national":        83.0,
-        "hazwaste_pctile_national":   89.0,
-        "ust_pctile_national":        85.0,
-        "wastewater_pctile_national": 70.0,
+        "pm25_pctile_national":            72.0,
+        "ozone_pctile_national":           68.0,
+        "no2_pctile_national":             90.0,
+        "diesel_pm_pctile_national":       88.0,
+        "toxic_releases_pctile_national":  79.0,
+        "traffic_pctile_national":         91.0,
+        "lead_paint_pctile_national":      94.0,
+        "superfund_pctile_national":       76.0,
+        "rmp_pctile_national":             83.0,
+        "hazwaste_pctile_national":        89.0,
+        "ust_pctile_national":             85.0,
+        "wastewater_pctile_national":      70.0,
+        "drinking_water_pctile_national":  62.0,
     },
     "demographic": {
         "pct_low_income":              0.71,
@@ -75,18 +77,19 @@ MOCK_78207 = {
 # Plausible value ranges for synthetic generation, keyed by the same snake_case
 # names. Used for every zip other than 78207.
 _ENV_RANGES = {
-    "pm25_avg_ugm3":             (5.0, 12.0),
-    "ozone_ppb":                 (45.0, 70.0),
-    "diesel_pm_ugm3":            (0.10, 0.80),
-    "air_toxics_cancer_risk":    (20.0, 50.0),
-    "air_toxics_resp_hazard":    (0.20, 0.70),
-    "traffic_proximity":         (200.0, 2200.0),
-    "lead_paint_pct":            (0.05, 0.80),
-    "superfund_proximity":       (0.0, 0.40),
-    "rmp_facility_proximity":    (0.10, 1.6),
-    "hazwaste_proximity":        (0.20, 3.5),
-    "underground_storage_tanks": (1.0, 10.0),
-    "wastewater_discharge":      (0.0, 0.50),
+    "pm25_avg_ugm3":                (5.0, 12.0),
+    "ozone_ppb":                    (45.0, 70.0),
+    "no2_ppb":                      (4.0, 24.0),
+    "diesel_pm_ugm3":               (0.10, 0.80),
+    "toxic_releases_air":           (50.0, 4000.0),
+    "traffic_proximity":            (200.0, 2200.0),
+    "lead_paint_pct":               (0.05, 0.80),
+    "superfund_proximity":          (0.0, 0.40),
+    "rmp_facility_proximity":       (0.10, 1.6),
+    "hazwaste_proximity":           (0.20, 3.5),
+    "underground_storage_tanks":    (1.0, 10.0),
+    "wastewater_discharge":         (0.0, 0.50),
+    "drinking_water_noncompliance": (0.0, 3.0),
 }
 
 _DEMO_RANGES = {
@@ -119,7 +122,8 @@ def generate_mock_ejscreen(
         {"location": {...}, "environmental": {...}, "percentiles": {...},
          "demographic": {...}}  — no "_raw" key.
     """
-    location = {"lat": lat, "lon": lon, "radius_miles": radius_miles}
+    location = {"lat": lat, "lon": lon, "radius_miles": radius_miles,
+                "granularity": "block_group"}
 
     if zip_code == "78207":
         return {

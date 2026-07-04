@@ -1,42 +1,67 @@
 :root {
-  /* Neutrals — warm parchment, not cold gray */
-  --bg: #f6f1e7;
-  --surface: #fffdf8;
-  --surface-2: #efe7d8;
-  --border: #ddd2ba;
-  --text: #211a12;
-  --text-muted: #7a6f5c;
+  /* ── Palette v4: "Watchtower" — Sentinal keeps vigil, so the palette is
+     built around a watchtower at dusk: weathered stone underfoot, deep
+     slate-teal standing guard, an antique-brass beacon signaling attention,
+     and a true alarm-red for real danger. No purple, white, or orange. ───── */
+  --bg: #e3ded0;
+  --surface: #f3efe4;
+  --surface-2: #d7d0bd;
+  --border: #b3ab93;
+  --border-ink: #1d4a48;
+  --text: #201f1a;
+  --text-muted: #6d6a5c;
+  --ink-faint: rgba(29, 74, 72, 0.08);
 
-  /* Brand — burnt terracotta. Deliberately not blue/teal/indigo/purple. */
-  --brand: #b1502b;
-  --brand-dark: #8a3c1f;
-  --brand-tint: rgba(177, 80, 43, 0.14);
+  /* Primary — deep slate teal, the watchtower standing watch through the night */
+  --brand: #1d6b66;
+  --brand-dark: #133f3d;
+  --brand-tint: rgba(29, 107, 102, 0.16);
 
-  /* Severity scale (A→F / good→severe) — single earth-tone family, stepping
-     through hue and lightness together so the gradient reads clearly even
-     without relying on red/green alone. */
-  --good: #4d7c3f;
-  --good-bg: #eef3e4;
-  --moderate: #b08a1f;
-  --moderate-bg: #f7eed9;
-  --elevated: #c1672f;
-  --elevated-bg: #f8e9da;
-  --severe: #8c2f23;
-  --severe-bg: #f3e1dd;
+  /* Accent — antique brass, the sentinel's signal beacon: reserved for CTAs */
+  --accent: #a9791c;
+  --accent-dark: #7c5711;
+  --accent-tint: rgba(169, 121, 28, 0.18);
 
-  /* Flat, hairline-bordered shape language — no soft glow shadows */
-  --shadow-sm: 0 1px 0 rgba(33, 26, 18, 0.05);
-  --shadow: 0 1px 0 rgba(33, 26, 18, 0.07), 0 0 0 1px rgba(33, 26, 18, 0.03);
+  /* Data-layer colors — the map's three signals: a living leaf-green for
+     green space, the brand teal for monitored facilities, and brass for the
+     air-burden heatmap (a beacon glow, not a fire — no orange). */
+  --data-blue: #1d6b66;
+  --data-blue-bg: #dcece9;
+  --data-green: #2f8f52;
+  --data-green-bg: #dcf1e1;
+  --data-orange: #a9791c;
+  --data-orange-bg: #f2e6c8;
+
+  /* Severity scale (A→F / good→severe): watch-green → slate teal → brass
+     alert → brick → true alarm-red, like a beacon escalating from calm
+     to crimson. */
+  --good: #2f8f52;
+  --good-bg: #dcf1e1;
+  --moderate: #1d6b66;
+  --moderate-bg: #dcece9;
+  --elevated: #a9791c;
+  --elevated-bg: #f2e6c8;
+  --severe: #8a1620;
+  --severe-bg: #f1d9d5;
+
+  /* Hand-drawn shape language: wobbly border-radii instead of perfect corners */
+  --wobble: 8px 18px 10px 16px / 16px 9px 18px 10px;
+  --wobble-2: 16px 8px 18px 9px / 9px 17px 8px 18px;
+  --wobble-sm: 4px 10px 5px 9px / 9px 5px 10px 4px;
+
+  --shadow-sm: 1px 2px 0 rgba(44, 36, 24, 0.08);
+  --shadow: 2px 3px 0 rgba(44, 36, 24, 0.1);
   --radius: 10px;
   --radius-sm: 6px;
-  /* Hover/color-state transitions use --ease; entrances and press feedback
-     use the stronger --ease-out (built-in CSS easings are too weak to feel
-     intentional on elements that are appearing or being pressed). */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   --font-display: "Fraunces", "Iowan Old Style", serif;
-  font-family: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Special Elite", "Courier New", monospace;
+  --font-hand: "Caveat", "Segoe Script", cursive;
+
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -50,9 +75,62 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* The page itself is terrain: faint concentric contour rings emanating from
+     two off-canvas "peaks", drawn with repeating radial gradients. */
+  background:
+    repeating-radial-gradient(
+      circle at 12% 18%,
+      transparent 0 54px,
+      rgba(29, 74, 72, 0.04) 54px 55.5px
+    ),
+    repeating-radial-gradient(
+      circle at 88% 105%,
+      transparent 0 68px,
+      rgba(29, 74, 72, 0.034) 68px 69.5px
+    ),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* Stone-grain texture laid over everything — fractal noise, blend-multiplied. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.11 0 0 0 0 0.29 0 0 0 0 0.28 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 #root {
   min-height: 100vh;
+}
+
+::selection {
+  background: var(--brand-tint);
+}
+
+/* ── Scrollbars — inked parchment, not stock white ─────────────────────────── */
+* {
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: var(--border) var(--bg);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-ink);
+}
+::-webkit-scrollbar-corner {
+  background: var(--bg);
 }

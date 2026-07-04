@@ -18,6 +18,7 @@ import logging
 import math
 import os
 import time
+from pathlib import Path
 
 import httpx
 from anthropic import AsyncAnthropic
@@ -37,7 +38,7 @@ from mock_data import generate_mock_ejscreen
 
 logger = logging.getLogger("ejmapper")
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
@@ -112,27 +113,31 @@ anthropic = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 # only: resets on restart and isn't shared across instances (fine for one Render
 # free-tier instance). Size-capped so enumerating all ~40k US zips can't OOM us.
 _CACHE_TTL_SECONDS = 24 * 60 * 60   # 24h — EJScreen data is effectively static
+# Mock/fallback results get a much shorter TTL: if EPA blips for one request we
+# shouldn't pin that zip to labeled-estimated data for a whole day after the
+# real service recovers.
+_CACHE_TTL_MOCK_SECONDS = 10 * 60   # 10 min
 _CACHE_MAX_ENTRIES = 5000
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict[str, tuple[float, object]] = {}   # key -> (expires_at, value)
 
 
 def cache_get(key: str):
     entry = _cache.get(key)
     if entry is None:
         return None
-    ts, value = entry
-    if time.time() - ts > _CACHE_TTL_SECONDS:
+    expires_at, value = entry
+    if time.time() > expires_at:
         _cache.pop(key, None)
         return None
     return value
 
 
-def cache_set(key: str, value: dict) -> None:
+def cache_set(key: str, value, ttl: float = _CACHE_TTL_SECONDS) -> None:
     if len(_cache) >= _CACHE_MAX_ENTRIES and key not in _cache:
-        # Evict the oldest entry (FIFO) to bound memory.
+        # Evict the soonest-to-expire entry to bound memory.
         oldest = min(_cache, key=lambda k: _cache[k][0])
         _cache.pop(oldest, None)
-    _cache[key] = (time.time(), value)
+    _cache[key] = (time.time() + ttl, value)
 
 
 def require_zip(zip_code: str) -> None:
@@ -141,10 +146,26 @@ def require_zip(zip_code: str) -> None:
         raise HTTPException(status_code=400, detail="Zip code must be exactly 5 digits.")
 
 
+async def geocode_zip_cached(zip_code: str) -> tuple[float, float]:
+    """
+    Geocode a zip to its centroid (lat, lon), cached for 7 days — zip centroids
+    don't move, and caching keeps us well inside Nominatim's 1 req/s policy.
+    Raises ValueError if the zip can't be geocoded. Shared by the main report
+    AND the nearby-zips scorer so both always score a zip at the same point.
+    """
+    key = f"geocode:{zip_code}"
+    hit = cache_get(key)
+    if hit is not None:
+        return hit
+    latlon = await zip_to_latlon(zip_code)
+    cache_set(key, latlon, ttl=7 * 24 * 60 * 60)
+    return latlon
+
+
 async def resolve_zip(zip_code: str) -> tuple[float, float]:
     """Geocode a zip to (lat, lon), mapping failure to a clean 404."""
     try:
-        return await zip_to_latlon(zip_code)
+        return await geocode_zip_cached(zip_code)
     except ValueError:
         raise HTTPException(status_code=404, detail="Zip code not found.")
 
@@ -202,42 +223,75 @@ async def nearby_zips_endpoint(request: Request, zip_code: str):
         return_exceptions=True,
     )
 
-    # Pair each result with the sample point that produced it — that point's
-    # coordinates are good enough to score the zip without geocoding it again.
     seen = {zip_code}
-    candidates = []  # (zip, lat, lon)
-    for (plat, plon), z in zip(sample_points, raw_zips):
+    candidates = []
+    for z in raw_zips:
         if isinstance(z, str) and z.isdigit() and len(z) == 5 and z not in seen:
             seen.add(z)
-            candidates.append((z, plat, plon))
+            candidates.append(z)
     if not candidates:
         logger.warning(
             "nearby-zips: 0/%d sample points resolved to a new zip for %s",
             len(sample_points), zip_code,
         )
 
-    async def score_zip(z: str, zlat: float, zlon: float):
+    # Score each zip at its OWN geocoded centroid with the same radius the main
+    # report uses — not at the probe point that discovered it. This is what
+    # guarantees the grade on a nearby card equals the grade on that zip's own
+    # report page. Geocodes are cached 7 days and the uncached ones are
+    # staggered 1.1s apart for Nominatim's 1 req/s policy.
+    async def score_zip(z: str, delay: float):
         try:
+            await asyncio.sleep(delay)
+            zlat, zlon = await geocode_zip_cached(z)
             try:
                 ej = await get_ejscreen_data(zlat, zlon, radius_miles=1.0)
+                source = "live"
             except Exception:
                 ej = generate_mock_ejscreen(zlat, zlon, z, radius_miles=1.0)
-            pcts = ej.get("percentiles", {})
-            vals = [v for v in pcts.values() if v is not None]
-            score = round(sum(vals) / len(vals)) if vals else 50
-            return {"zip": z, "score": score, "grade": _quick_grade(score)}
+                source = "mock"
+            score = _score_from_percentiles(ej.get("percentiles", {}))
+            return {
+                "zip": z,
+                "score": score,
+                "grade": _grade_from_score(score),
+                "data_source": source,
+            }
         except Exception:
             return None
 
-    scored = await asyncio.gather(*[score_zip(z, la, lo) for z, la, lo in candidates])
+    uncached = [z for z in candidates if cache_get(f"geocode:{z}") is None]
+    delays = {z: i * 1.1 for i, z in enumerate(uncached)}
+    scored = await asyncio.gather(*[score_zip(z, delays.get(z, 0.0)) for z in candidates])
     zips = sorted([r for r in scored if r], key=lambda x: x["score"])
 
-    result = {"zips": zips, "center_zip": zip_code}
-    cache_set(cache_key, result)
+    # Surface honesty about the data: "live", "mock", or "mixed" — the frontend
+    # shows an "estimated data" note whenever any mock is present.
+    sources = {r["data_source"] for r in zips}
+    data_source = sources.pop() if len(sources) == 1 else ("mixed" if sources else "live")
+
+    result = {"zips": zips, "center_zip": zip_code, "data_source": data_source}
+    # Don't pin fallback data for a full day — recheck EPA every 10 minutes.
+    ttl = _CACHE_TTL_SECONDS if data_source == "live" else _CACHE_TTL_MOCK_SECONDS
+    cache_set(cache_key, result, ttl=ttl)
     return result
 
 
-def _quick_grade(score: int) -> str:
+# ── Canonical score/grade formula ──────────────────────────────────────────────
+# Single source of truth for turning EJScreen percentiles into a 0–100 burden
+# score and an A–F grade. Every place in the app that shows a score or grade
+# (the main report card, the nearby-zips comparison strip, anywhere else added
+# later) MUST call these two functions rather than deriving its own number —
+# that guarantee is what keeps the grade for a given zip identical everywhere
+# it appears. Claude is deliberately never asked to invent the score/grade
+# (see generate_report_card): LLM output is not deterministic, so letting it
+# free-form a number here would let two views of the same zip disagree again.
+def _score_from_percentiles(percentiles: dict) -> int:
+    vals = [v for v in percentiles.values() if v is not None]
+    return round(sum(vals) / len(vals)) if vals else 50
+
+
+def _grade_from_score(score: int) -> str:
     if score < 30: return "A"
     if score < 50: return "B"
     if score < 65: return "C"
@@ -293,16 +347,32 @@ async def neighborhood(
         ejscreen_data = generate_mock_ejscreen(lat, lon, zip_code, radius_miles=radius)
         data_source = "mock"
 
-    # Step 3: Generate AI report card using Claude
+    # Step 3: Compute the score and grade deterministically — see
+    # _score_from_percentiles / _grade_from_score for why this must not be left
+    # to the AI. Every zip's grade is now a pure function of its percentiles, so
+    # it's identical here, in the nearby-zips comparison, and anywhere else it's
+    # ever shown.
+    score = _score_from_percentiles(ejscreen_data["percentiles"])
+    grade = _grade_from_score(score)
+
+    # Step 4: Generate the AI report card's narrative (summary/findings/actions)
+    # using Claude, telling it the fixed score and grade so its prose matches.
     report_card = await generate_report_card(
         zip_code=zip_code,
         environmental=ejscreen_data["environmental"],
         percentiles=ejscreen_data["percentiles"],
         demographic=ejscreen_data["demographic"],
         profile=profile,
+        score=score,
+        grade=grade,
     )
+    # Belt-and-suspenders: force the authoritative values even if Claude's JSON
+    # somehow included its own score/grade fields, so a model slip-up can never
+    # make this report disagree with the rest of the app again.
+    report_card["score"] = score
+    report_card["grade"] = grade
 
-    # Step 4: Return everything (strip _raw — it's too noisy for the frontend)
+    # Step 5: Return everything (strip _raw — it's too noisy for the frontend)
     ejscreen_data.pop("_raw", None)
 
     result = {
@@ -314,8 +384,147 @@ async def neighborhood(
         "report_card":   report_card,
         "data_source":   data_source,   # "live" = real EJScreen, "mock" = fallback
     }
-    cache_set(cache_key, result)
+    # Mock results expire fast so the app returns to live data soon after EPA
+    # recovers, instead of pinning "estimated" data for 24h.
+    cache_set(cache_key, result,
+              ttl=_CACHE_TTL_SECONDS if data_source == "live" else _CACHE_TTL_MOCK_SECONDS)
     return {**result, "cached": False}
+
+
+# ── Live conditions route (real-time, measured data — no API keys) ────────────
+# Unlike EJScreen (a static survey snapshot), everything here is live measured
+# or officially issued data, fetched per request from free public services:
+#   air     — Open-Meteo Air Quality API (current US AQI + pollutants)
+#   weather — NWS gridpoint forecast (3-day daytime highs + conditions)
+#   alerts  — National Weather Service active alerts for the exact point
+#   quakes  — USGS earthquakes (mag 2.5+, 200 km, past 30 days)
+# Each source fails independently to None so one outage never hides the rest.
+
+_OPEN_METEO_AQ = "https://air-quality-api.open-meteo.com/v1/air-quality"
+_NWS_ALERTS = "https://api.weather.gov/alerts/active"
+_USGS_QUAKES = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+# NWS requires an identifying User-Agent on every request.
+_LIVE_HEADERS = {"User-Agent": "Sentinal/1.0 (github.com/jaym267/community-cyber-shield)"}
+
+
+async def _fetch_air(client: httpx.AsyncClient, lat: float, lon: float):
+    r = await client.get(_OPEN_METEO_AQ, params={
+        "latitude": lat, "longitude": lon,
+        "current": "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
+        "timezone": "auto",
+    })
+    r.raise_for_status()
+    cur = r.json().get("current", {})
+    return {
+        "us_aqi": cur.get("us_aqi"),
+        "pm2_5": cur.get("pm2_5"),
+        "pm10": cur.get("pm10"),
+        "ozone": cur.get("ozone"),
+        "nitrogen_dioxide": cur.get("nitrogen_dioxide"),
+        "time": cur.get("time"),
+    }
+
+
+async def _fetch_weather(client: httpx.AsyncClient, lat: float, lon: float):
+    # NWS two-step (point metadata → gridpoint forecast). Chosen over Open-Meteo's
+    # forecast host, whose TLS handshake resets intermittently from some networks;
+    # NWS is already a dependency for alerts and needs no key.
+    r = await client.get(f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}")
+    r.raise_for_status()
+    forecast_url = r.json().get("properties", {}).get("forecast")
+    if not forecast_url:
+        return None
+    r2 = await client.get(forecast_url)
+    r2.raise_for_status()
+    days = []
+    for p in r2.json().get("properties", {}).get("periods", []):
+        if p.get("isDaytime"):
+            days.append({
+                "date": (p.get("startTime") or "")[:10],
+                "name": p.get("name"),
+                "high_f": p.get("temperature"),
+                "short": p.get("shortForecast"),
+            })
+        if len(days) == 3:
+            break
+    return {"days": days} if days else None
+
+
+async def _fetch_alerts(client: httpx.AsyncClient, lat: float, lon: float):
+    r = await client.get(_NWS_ALERTS, params={"point": f"{lat},{lon}"})
+    r.raise_for_status()
+    out = []
+    for f in r.json().get("features", [])[:5]:
+        p = f.get("properties", {})
+        out.append({
+            "event": p.get("event"),
+            "severity": p.get("severity"),
+            "headline": p.get("headline"),
+            "expires": p.get("expires"),
+            "instruction": (p.get("instruction") or "")[:280] or None,
+        })
+    return out   # [] is meaningful: "no active alerts"
+
+
+async def _fetch_quakes(client: httpx.AsyncClient, lat: float, lon: float):
+    start = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 30 * 86400))
+    r = await client.get(_USGS_QUAKES, params={
+        "format": "geojson", "latitude": lat, "longitude": lon,
+        "maxradiuskm": 200, "starttime": start, "minmagnitude": 2.5,
+        "orderby": "magnitude", "limit": 20,
+    })
+    r.raise_for_status()
+    feats = r.json().get("features", [])
+    strongest = None
+    if feats:
+        p = feats[0].get("properties", {})
+        strongest = {"mag": p.get("mag"), "place": p.get("place"), "time_ms": p.get("time")}
+    return {"count_30d": len(feats), "strongest": strongest}
+
+
+@app.get("/api/live-conditions/{zip_code}")
+@limiter.limit("20/minute")
+async def live_conditions(request: Request, zip_code: str):
+    """
+    Real-time conditions for a zip: current air quality (measured), 3-day
+    heat/UV forecast, active NWS hazard alerts, and recent seismic activity.
+    Sources that fail return null — the frontend labels each section's source.
+    """
+    require_zip(zip_code)
+
+    cache_key = f"live:{zip_code}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    lat, lon = await resolve_zip(zip_code)
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0), headers=_LIVE_HEADERS) as client:
+        air, weather, alerts, quakes = await asyncio.gather(
+            _fetch_air(client, lat, lon),
+            _fetch_weather(client, lat, lon),
+            _fetch_alerts(client, lat, lon),
+            _fetch_quakes(client, lat, lon),
+            return_exceptions=True,
+        )
+
+    def ok(v):
+        return None if isinstance(v, BaseException) else v
+    for name, v in (("air", air), ("weather", weather), ("alerts", alerts), ("quakes", quakes)):
+        if isinstance(v, BaseException):
+            logger.warning("live-conditions %s failed for %s: %r", name, zip_code, v)
+
+    result = {
+        "zip_code": zip_code,
+        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "air": ok(air),
+        "weather": ok(weather),
+        "alerts": ok(alerts),
+        "quakes": ok(quakes),
+    }
+    # Live data goes stale fast — 15 minutes, matching Open-Meteo's update cadence.
+    cache_set(cache_key, result, ttl=15 * 60)
+    return result
 
 
 # ── Map layers route (heatmap + facilities + green space as GeoJSON) ──────────
@@ -429,15 +638,24 @@ async def generate_report_card(
     environmental: dict,
     percentiles: dict,
     demographic: dict,
+    score: int,
+    grade: str,
     profile: str = "general",
 ) -> dict:
     """
-    Send neighborhood data to Claude and get back a structured report card.
+    Send neighborhood data to Claude and get back the narrative portion of the
+    report card. The score and grade are NOT generated here — they're computed
+    deterministically by _score_from_percentiles/_grade_from_score in the caller
+    and simply handed to Claude as fixed facts to write around. An LLM asked to
+    invent a score free-form will not reliably reproduce the same number twice,
+    which previously let the same zip show different grades in different parts
+    of the app (e.g. a "D" on its own report card but a "C" in the nearby-zips
+    comparison). Do not change this back to letting Claude choose the score/grade.
 
     Returns:
         {
-            "score": int (0–100, higher = more burdened),
-            "grade": str ("A" through "F"),
+            "score": int (0–100, higher = more burdened) — echoes the input,
+            "grade": str ("A" through "F") — echoes the input,
             "summary": str (2–3 sentence plain language overview),
             "key_findings": list[str] (3 specific findings),
             "action_items": list[str] (2 things residents can do),
@@ -457,7 +675,9 @@ async def generate_report_card(
 
 You are writing for {ctx["audience"]}. {ctx["emphasis"]}
 
-Here is the environmental data for this neighborhood (1-mile radius):
+This neighborhood has ALREADY been scored: {score} out of 100 (higher = more environmentally burdened) and assigned grade {grade} (A = clean, F = severely burdened). These are fixed — your job is only to explain and justify them in plain language, not to second-guess or restate a different number.
+
+Here is the environmental data for this neighborhood (the census block group at the heart of this zip code, from EPA's EJScreen v2.32 dataset):
 
 ENVIRONMENTAL INDICATORS (raw values):
 {env_clean}
@@ -468,11 +688,9 @@ NATIONAL PERCENTILE RANKS (0-100, higher means more pollution than that % of the
 DEMOGRAPHIC CONTEXT:
 {demo_clean}
 
-Write a report card in this exact JSON format — no markdown, no code blocks, just raw JSON:
+Write the narrative portion of the report card in this exact JSON format — no markdown, no code blocks, just raw JSON, and no "score" or "grade" fields (those are already fixed above):
 {{
-  "score": <integer 0-100 where 100 = most environmentally burdened>,
-  "grade": <"A", "B", "C", "D", or "F" — A means clean, F means severely burdened>,
-  "summary": "<2-3 sentences a resident with no science background can understand. Be direct and honest, not alarming.>",
+  "summary": "<2-3 sentences a resident with no science background can understand, consistent with the {score}/100 score and {grade} grade. Be direct and honest, not alarming.>",
   "key_findings": [
     "<finding 1 — be specific, cite a number>",
     "<finding 2 — be specific, cite a number>",

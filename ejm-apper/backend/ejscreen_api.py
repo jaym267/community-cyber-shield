@@ -1,70 +1,93 @@
 """
-ejscreen_api.py — EPA EJScreen data fetcher for EJMapper.
+ejscreen_api.py — EJScreen data fetcher for Sentinal.
 
-The EJScreen REST broker returns 12 environmental indicators + 6 demographic
-indicators for any US point location. No API key required.
+HISTORY: EPA removed EJScreen from ejscreen.epa.gov on Feb 5, 2025 (the domain
+no longer resolves). This module now queries the community rehost of EJScreen
+v2.32 maintained by the Public Environmental Data Partners (PEDP) — the
+original EPA dataset served as a public ArcGIS Online FeatureServer, no API
+key required. See https://screening-tools.com/epa-ejscreen.
 
-    data = await get_ejscreen_data(lat=29.4241, lon=-98.4936, radius_miles=1.0)
+Semantics: this is a point-in-polygon lookup returning the census BLOCK GROUP
+containing the point — not the old broker's ring-buffer aggregation. The
+`radius_miles` parameter is kept for signature compatibility and echoed back,
+but results describe the containing block group.
+
+    data = await get_ejscreen_data(lat=29.4241, lon=-98.4936)
 """
 
-import json
 import logging
 
 import httpx
 
 logger = logging.getLogger("ejmapper")
 
-EJSCREEN_URL = "https://ejscreen.epa.gov/mapper/ejscreenRESTbroker.aspx"
+# PEDP rehost of the EPA EJScreen v2.32 block-group percentile layer.
+EJSCREEN_URL = (
+    "https://services2.arcgis.com/w4yiQqB14ZaAGzJq/arcgis/rest/services/"
+    "EJScreen_US_Percentiles_Block_Group_gdb_V_2.32_(Parent)_view/"
+    "FeatureServer/0/query"
+)
 
-# ── Field maps: EJScreen raw field name → snake_case key used in the app ─────
-# Reference: EJScreen Technical Documentation (2023). Field names occasionally
-# drift between EJScreen releases; _extract() tolerates missing fields.
+# ── Field maps: EJScreen v2.32 field name → snake_case key used in the app ───
+# Reference: EJScreen 2.32 schema as served by the PEDP FeatureServer (verified
+# live 2026-07). Raw values pair with P_-prefixed national percentiles.
+# NOTE: the old AirToxScreen fields (CANCER/RESP) were removed in v2.32 and
+# replaced by RSEI_AIR (toxicity-weighted releases to air). NO2 and DWATER
+# (drinking water non-compliance) are new in this release.
 
 ENV_FIELDS: dict[str, str] = {
     # Air quality
-    "AVGPM25": "pm25_avg_ugm3",           # Particulate matter 2.5, annual avg (μg/m³)
-    "OZONE":   "ozone_ppb",               # Summer ozone average (ppb)
-    "DSLPM":   "diesel_pm_ugm3",          # Diesel particulate matter (μg/m³)
-    # Air toxics
-    "CANCER":  "air_toxics_cancer_risk",  # Lifetime cancer risk per million people
-    "RESP":    "air_toxics_resp_hazard",  # Noncancer respiratory hazard index
+    "PM25":       "pm25_avg_ugm3",           # Particulate matter 2.5, annual avg (μg/m³)
+    "OZONE":      "ozone_ppb",               # Summer ozone average (ppb)
+    "NO2":        "no2_ppb",                 # Nitrogen dioxide, annual avg (ppb)
+    "DSLPM":      "diesel_pm_ugm3",          # Diesel particulate matter (μg/m³)
+    "RSEI_AIR":   "toxic_releases_air",      # Toxicity-weighted industrial air releases (index)
     # Traffic & built environment
-    "PTRAF":   "traffic_proximity",       # Weighted daily vehicles/meter (AADT)
-    "LDPNT":   "lead_paint_pct",          # % housing units built before 1960
+    "PTRAF":      "traffic_proximity",       # Distance-weighted daily traffic count (index)
+    "PRE1960PCT": "lead_paint_pct",          # Fraction of housing built before 1960 (0–1)
     # Hazardous sites
-    "PNPL":    "superfund_proximity",     # Superfund (NPL) sites / km²
-    "PRMP":    "rmp_facility_proximity",  # RMP risk-management facilities / km²
-    "PTSDF":   "hazwaste_proximity",      # Hazardous waste treatment sites / km²
+    "PNPL":       "superfund_proximity",     # Superfund (NPL) sites / km²
+    "PRMP":       "rmp_facility_proximity",  # RMP risk-management facilities / km²
+    "PTSDF":      "hazwaste_proximity",      # Hazardous waste treatment sites / km²
     # Water & underground
-    "UST":     "underground_storage_tanks",  # UST + leaking UST count / km²
-    "PWDIS":   "wastewater_discharge",    # Toxicity-weighted effluent flow
+    "UST":        "underground_storage_tanks",  # UST + leaking UST count / km²
+    "PWDIS":      "wastewater_discharge",    # Toxicity-weighted effluent flow (index)
+    "DWATER":     "drinking_water_noncompliance",  # Drinking water non-compliance (index)
 }
 
 # National percentile ranks (0–100; 80 = worse than 80% of the US population).
-# Suffix _D2 = EJScreen's supplemental index (environmental only, no demo weighting).
+# P_<FIELD> = percentile of the raw environmental indicator itself — NOT the
+# demographically weighted EJ index (those are the D2_/P_D2_ fields, which we
+# deliberately do not use for the per-indicator "worse than X% of the US" claim).
 ENV_PERCENTILE_FIELDS: dict[str, str] = {
-    "PM25_D2":   "pm25_pctile_national",
-    "OZONE_D2":  "ozone_pctile_national",
-    "DSLPM_D2":  "diesel_pm_pctile_national",
-    "CANCER_D2": "cancer_risk_pctile_national",
-    "RESP_D2":   "resp_hazard_pctile_national",
-    "PTRAF_D2":  "traffic_pctile_national",
-    "LDPNT_D2":  "lead_paint_pctile_national",
-    "PNPL_D2":   "superfund_pctile_national",
-    "PRMP_D2":   "rmp_pctile_national",
-    "PTSDF_D2":  "hazwaste_pctile_national",
-    "UST_D2":    "ust_pctile_national",
-    "PWDIS_D2":  "wastewater_pctile_national",
+    "P_PM25":     "pm25_pctile_national",
+    "P_OZONE":    "ozone_pctile_national",
+    "P_NO2":      "no2_pctile_national",
+    "P_DSLPM":    "diesel_pm_pctile_national",
+    "P_RSEI_AIR": "toxic_releases_pctile_national",
+    "P_PTRAF":    "traffic_pctile_national",
+    "P_LDPNT":    "lead_paint_pctile_national",
+    "P_PNPL":     "superfund_pctile_national",
+    "P_PRMP":     "rmp_pctile_national",
+    "P_PTSDF":    "hazwaste_pctile_national",
+    "P_UST":      "ust_pctile_national",
+    "P_PWDIS":    "wastewater_pctile_national",
+    "P_DWATER":   "drinking_water_pctile_national",
 }
 
 DEMO_FIELDS: dict[str, str] = {
-    "LOWINCPCT":  "pct_low_income",
-    "MINORPCT":   "pct_minority",
-    "LESSHSPCT":  "pct_no_hs_diploma",
-    "LINGISOPCT": "pct_linguistically_isolated",
-    "UNDER5PCT":  "pct_under_5",
-    "OVER64PCT":  "pct_over_64",
+    "LOWINCPCT":     "pct_low_income",
+    "PEOPCOLORPCT":  "pct_minority",          # renamed from MINORPCT in v2.32
+    "LESSHSPCT":     "pct_no_hs_diploma",
+    "LINGISOPCT":    "pct_linguistically_isolated",
+    "UNDER5PCT":     "pct_under_5",
+    "OVER64PCT":     "pct_over_64",
 }
+
+_OUT_FIELDS = ",".join(
+    ["ID", "ST_ABBREV", "CNTY_NAME"]
+    + list(ENV_FIELDS) + list(ENV_PERCENTILE_FIELDS) + list(DEMO_FIELDS)
+)
 
 
 async def get_ejscreen_data(
@@ -73,54 +96,62 @@ async def get_ejscreen_data(
     radius_miles: float = 1.0,
 ) -> dict:
     """
-    Fetch EPA EJScreen environmental-justice indicators for a point location.
+    Fetch EJScreen v2.32 indicators for the census block group containing the
+    point (via the PEDP community rehost — EPA's own service was shut down).
 
-    Returns a dict with "location", "environmental" (12 raw values),
-    "percentiles" (12 national ranks, higher = more burdened), "demographic"
-    (6 fractions 0–1), and "_raw" (full EJScreen row — strip before sending on).
+    Returns a dict with "location", "environmental" (13 raw values),
+    "percentiles" (13 national ranks, higher = more burdened), "demographic"
+    (6 fractions 0–1), and "_raw" (full attribute row — strip before sending on).
 
     Raises:
-        ValueError:             no rows returned (bad coordinates / outside US).
-        httpx.HTTPStatusError:  EPA server returned a non-2xx response.
-        httpx.TimeoutException: EPA server timed out.
+        ValueError:             no block group found (outside US coverage).
+        httpx.HTTPStatusError:  server returned a non-2xx response.
+        httpx.TimeoutException: server timed out.
+        httpx.ConnectError:     server unreachable.
     """
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         raise ValueError(f"Invalid coordinates: lat={lat}, lon={lon}")
 
-    geometry = json.dumps(
-        {"spatialReference": {"wkid": 4326}, "x": lon, "y": lat},
-        separators=(",", ":"),
-    )
     params = {
-        "namestr":  "",
-        "geometry": geometry,
-        "distance": str(radius_miles),
-        "unit":     "9035",       # 9035 = US statute miles
-        "areatype": "circle",
-        "areaid":   "",
-        "f":        "pjson",
-        "showgdb":  "true",
-        "filetype": "0",
+        "geometry":     f"{lon},{lat}",
+        "geometryType": "esriGeometryPoint",
+        "inSR":         "4326",
+        "spatialRel":   "esriSpatialRelIntersects",
+        "returnGeometry": "false",
+        "outFields":    _OUT_FIELDS,
+        "f":            "json",
     }
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
         resp = await client.get(EJSCREEN_URL, params=params)
         resp.raise_for_status()
         payload = resp.json()
 
-    # EJScreen nests results under data.rows; older versions used a top-level key.
-    rows = payload.get("data", {}).get("rows") or payload.get("rows") or []
-    if not rows:
-        # Log internals server-side; keep the client-facing message generic.
-        logger.warning(
-            "EJScreen returned no rows for (%s, %s). Payload keys: %s",
-            lat, lon, list(payload.keys()),
+    # ArcGIS reports errors inside a 200 payload — normalize those to HTTP-ish
+    # failures so main.py's fallback logic treats them like an outage.
+    if "error" in payload:
+        logger.warning("EJScreen mirror error payload: %s", payload["error"])
+        raise httpx.HTTPStatusError(
+            "EJScreen mirror returned an error payload",
+            request=resp.request, response=resp,
         )
+
+    features = payload.get("features") or []
+    if not features:
+        logger.warning("EJScreen mirror returned no block group for (%s, %s)", lat, lon)
         raise ValueError("EJScreen returned no data for the requested location.")
 
-    row = rows[0]
+    row = features[0].get("attributes", {})
     return {
-        "location": {"lat": lat, "lon": lon, "radius_miles": radius_miles},
+        "location": {
+            "lat": lat,
+            "lon": lon,
+            "radius_miles": radius_miles,          # kept for compatibility
+            "granularity": "block_group",          # point-in-polygon, not a ring buffer
+            "block_group_id": row.get("ID"),
+            "county": row.get("CNTY_NAME"),
+            "state": row.get("ST_ABBREV"),
+        },
         "environmental": _extract(row, ENV_FIELDS),
         "percentiles":   _extract(row, ENV_PERCENTILE_FIELDS),
         "demographic":   _extract(row, DEMO_FIELDS),

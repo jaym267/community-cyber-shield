@@ -9,23 +9,24 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // falls back to the local FastAPI dev server otherwise.
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
-// The 12 EJScreen indicators, in display order. Each pairs the raw value key
-// (from `environmental`) with its national-percentile key (from `percentiles`).
-// `pct: true` means the raw value is a 0–1 fraction shown as a percentage.
-// `desc` is the plain-language explainer shown when a card is expanded.
+// The 13 EJScreen v2.32 indicators, in display order. Each pairs the raw value
+// key (from `environmental`) with its national-percentile key (from
+// `percentiles`). `pct: true` means the raw value is a 0–1 fraction shown as a
+// percentage. `desc` is the plain-language explainer shown when a card is
+// expanded. Keys must match backend/ejscreen_api.py's field maps.
 const INDICATORS = [
   { env: "pm25_avg_ugm3", pctl: "pm25_pctile_national", label: "Fine particles (PM2.5)", unit: "µg/m³",
     desc: "Microscopic particles from vehicles, industry, and smoke that lodge deep in the lungs. Long-term exposure is linked to heart and lung disease." },
   { env: "ozone_ppb", pctl: "ozone_pctile_national", label: "Ozone", unit: "ppb",
     desc: "A gas formed when sunlight reacts with vehicle and industrial emissions. High levels trigger asthma attacks and irritate airways." },
+  { env: "no2_ppb", pctl: "no2_pctile_national", label: "Nitrogen dioxide (NO₂)", unit: "ppb",
+    desc: "A traffic-related gas concentrated near busy roads. Strongly linked to childhood asthma and reduced lung function." },
   { env: "diesel_pm_ugm3", pctl: "diesel_pm_pctile_national", label: "Diesel exhaust", unit: "µg/m³",
     desc: "Exhaust particles from trucks, buses, and heavy equipment — a known carcinogen, concentrated near highways and freight routes." },
-  { env: "air_toxics_cancer_risk", pctl: "cancer_risk_pctile_national", label: "Air toxics cancer risk", unit: "per million",
-    desc: "Estimated lifetime cancer risk from breathing the air toxics present locally, expressed per million people exposed." },
-  { env: "air_toxics_resp_hazard", pctl: "resp_hazard_pctile_national", label: "Respiratory hazard", unit: "index",
-    desc: "An index of airborne toxics that can harm breathing. Values approaching 1 indicate growing potential for respiratory effects." },
-  { env: "traffic_proximity", pctl: "traffic_pctile_national", label: "Traffic proximity", unit: "vehicles/m",
-    desc: "How much high-volume road traffic passes close to homes here — a strong proxy for exhaust exposure and noise." },
+  { env: "toxic_releases_air", pctl: "toxic_releases_pctile_national", label: "Industrial air toxics", unit: "index",
+    desc: "Toxicity-weighted industrial chemical releases to the air (EPA RSEI). Higher values mean more — and more dangerous — reported releases nearby." },
+  { env: "traffic_proximity", pctl: "traffic_pctile_national", label: "Traffic proximity", unit: "index",
+    desc: "A distance-weighted count of vehicles on nearby roads — how much high-volume traffic passes close to homes. A strong proxy for exhaust exposure and noise." },
   { env: "lead_paint_pct", pctl: "lead_paint_pctile_national", label: "Lead paint (pre-1960 homes)", unit: "", pct: true,
     desc: "Share of housing built before 1960, when lead paint was common. Lead exposure permanently affects children's development." },
   { env: "superfund_proximity", pctl: "superfund_pctile_national", label: "Superfund sites", unit: "per km²",
@@ -38,6 +39,8 @@ const INDICATORS = [
     desc: "Density of underground fuel and chemical tanks, which can leak into soil and groundwater over time." },
   { env: "wastewater_discharge", pctl: "wastewater_pctile_national", label: "Wastewater discharge", unit: "index",
     desc: "Toxicity-weighted industrial wastewater released into nearby streams and rivers." },
+  { env: "drinking_water_noncompliance", pctl: "drinking_water_pctile_national", label: "Drinking water violations", unit: "index",
+    desc: "How often local drinking water systems have violated federal safety standards. Higher values mean more frequent or serious non-compliance." },
 ];
 
 const PROFILES = [
@@ -54,13 +57,27 @@ const SAMPLE_ZIPS = [
   { zip: "11212", place: "Brooklyn NY" },
 ];
 
+// Grade key — worst-to-best is A→F, rendered as a gradient scale bar with the
+// current grade marked on it. `max` is the exclusive upper score bound for each
+// letter and MUST match _grade_from_score in backend/main.py — the backend is
+// the single source of truth for grades; these bands only pick display colors.
+// Colors: watch-green → slate teal → brass alert → brick → true alarm-red —
+// a beacon escalating from calm vigilance to crimson danger. No orange/purple/white.
+const GRADE_KEY = [
+  { letter: "A", max: 30,  color: "#2f8f52", bg: "#dcf1e1", label: "Clean", desc: "Minimal environmental burden" },
+  { letter: "B", max: 50,  color: "#1d6b66", bg: "#dcece9", label: "Low", desc: "Below-average burden" },
+  { letter: "C", max: 65,  color: "#a9791c", bg: "#f2e6c8", label: "Moderate", desc: "Around the national average" },
+  { letter: "D", max: 80,  color: "#95401f", bg: "#ecdad2", label: "High", desc: "Above-average burden" },
+  { letter: "F", max: 101, color: "#8a1620", bg: "#f1d9d5", label: "Severe", desc: "Among the most burdened areas" },
+];
+
 // Map a 0–100 burden value (higher = worse) to a severity color + background.
+// Derived from GRADE_KEY's bands so a score's color can never contradict the
+// letter grade shown beside it.
 function severity(value) {
-  if (value == null) return { color: "#9a8f7a", bg: "#efe9da" };
-  if (value < 50) return { color: "var(--good)", bg: "var(--good-bg)" };
-  if (value < 75) return { color: "var(--moderate)", bg: "var(--moderate-bg)" };
-  if (value < 90) return { color: "var(--elevated)", bg: "var(--elevated-bg)" };
-  return { color: "var(--severe)", bg: "var(--severe-bg)" };
+  if (value == null) return { color: "#807d6f", bg: "#e9e6da" };
+  const band = GRADE_KEY.find((g) => value < g.max) ?? GRADE_KEY[GRADE_KEY.length - 1];
+  return { color: band.color, bg: band.bg };
 }
 
 function fmt(value, isPct) {
@@ -69,15 +86,26 @@ function fmt(value, isPct) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
 
-// Grade key — worst-to-best is A→F, rendered as a gradient scale bar with the
-// current grade marked on it.
-const GRADE_KEY = [
-  { letter: "A", color: "#3f6b34", label: "Clean", desc: "Minimal environmental burden" },
-  { letter: "B", color: "#6b8f3f", label: "Low", desc: "Below-average burden" },
-  { letter: "C", color: "#b08a1f", label: "Moderate", desc: "Around the national average" },
-  { letter: "D", color: "#c1672f", label: "High", desc: "Above-average burden" },
-  { letter: "F", color: "#8c2f23", label: "Severe", desc: "Among the most burdened areas" },
+// US EPA Air Quality Index categories with plain-language guidance.
+// Breakpoints per EPA's official AQI scale.
+const AQI_BANDS = [
+  { max: 51,  label: "Good", color: "#2f8f52",
+    advice: "Air is clean right now — a good time to be outside." },
+  { max: 101, label: "Moderate", color: "#1d6b66",
+    advice: "Fine for most people. Unusually sensitive individuals should watch for symptoms." },
+  { max: 151, label: "Unhealthy for sensitive groups", color: "#a9791c",
+    advice: "Children, older adults, and people with asthma or heart disease should limit long outdoor exertion." },
+  { max: 201, label: "Unhealthy", color: "#95401f",
+    advice: "Everyone should reduce prolonged outdoor exertion; sensitive groups should stay indoors." },
+  { max: 301, label: "Very unhealthy", color: "#8a1620",
+    advice: "Avoid outdoor activity. Keep windows closed and run filtration if available." },
+  { max: Infinity, label: "Hazardous", color: "#5c0e16",
+    advice: "Health emergency conditions — everyone should remain indoors." },
 ];
+function aqiBand(aqi) {
+  if (aqi == null) return null;
+  return AQI_BANDS.find((b) => aqi < b.max) ?? AQI_BANDS[AQI_BANDS.length - 1];
+}
 
 // ── Mapbox layer style definitions ──────────────────────────────────────────
 const heatmapLayer = {
@@ -88,14 +116,15 @@ const heatmapLayer = {
     "heatmap-intensity": 1.1,
     "heatmap-radius": 34,
     "heatmap-opacity": 0.75,
+    // Brass-beacon data-layer gradient — pale gold glow escalating to alarm-red.
     "heatmap-color": [
       "interpolate", ["linear"], ["heatmap-density"],
       0, "rgba(0,0,0,0)",
-      0.2, "#d9c9a0",
-      0.4, "#cc9a3e",
-      0.6, "#c1672f",
-      0.8, "#9c3a26",
-      1, "#5e1a12",
+      0.2, "#e8d69a",
+      0.4, "#cba33c",
+      0.6, "#a9791c",
+      0.8, "#95401f",
+      1, "#5c0e16",
     ],
   },
 };
@@ -105,13 +134,15 @@ const facilitiesLayer = {
   type: "circle",
   paint: {
     "circle-radius": 7,
+    // Slate teal = regulated facility (calm, monitored); alarm-red = flagged
+    // for a recent compliance violation.
     "circle-color": [
       "match", ["get", "type"],
-      "Recent violation", "#8c2f23",
-      "#3a3530",
+      "Recent violation", "#8a1620",
+      "#1d6b66",
     ],
     "circle-stroke-width": 2,
-    "circle-stroke-color": "#fffdf8",
+    "circle-stroke-color": "#f3efe4",
     "circle-opacity": 0.9,
   },
 };
@@ -119,13 +150,13 @@ const facilitiesLayer = {
 const greenFillLayer = {
   id: "green-fill",
   type: "fill",
-  paint: { "fill-color": "#5c7a45", "fill-opacity": 0.3 },
+  paint: { "fill-color": "#2f8f52", "fill-opacity": 0.25 },
 };
 
 const greenLineLayer = {
   id: "green-line",
   type: "line",
-  paint: { "line-color": "#3f5b2e", "line-width": 1.5 },
+  paint: { "line-color": "#1d6b66", "line-width": 1.5 },
 };
 
 // Average the three air-pollution percentiles to drive heatmap intensity.
@@ -185,21 +216,46 @@ function saveRecent(zip) {
   }
 }
 
-// Decorative topographic contour lines for the landing hero.
+// Decorative topography for the landing hero: two nested-contour "hills"
+// (concentric wobbly blobs, like elevation lines on a survey map) plus a few
+// spot-elevation markers with typewriter labels.
 function ContourBackground() {
+  const blob =
+    "M 0 -150 C 105 -160 175 -95 185 -10 C 195 80 130 150 25 162 C -80 174 -170 115 -180 15 C -190 -85 -105 -140 0 -150 Z";
+  const hill = (cx, cy, baseScale, rings, keyPrefix) =>
+    Array.from({ length: rings }).map((_, i) => (
+      <path
+        key={`${keyPrefix}-${i}`}
+        d={blob}
+        fill="none"
+        stroke="var(--brand)"
+        strokeWidth="1.1"
+        opacity={0.055 + i * 0.012}
+        transform={`translate(${cx} ${cy}) rotate(${i * 7}) scale(${baseScale * (1 - i * 0.14)})`}
+      />
+    ));
   return (
     <svg className="contours" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-        <path
-          key={i}
-          d={`M -100 ${140 + i * 95}
-              C 200 ${90 + i * 95}, 380 ${210 + i * 88}, 620 ${150 + i * 92}
-              S 1000 ${80 + i * 96}, 1300 ${170 + i * 90}`}
-          fill="none"
-          stroke="var(--brand)"
-          strokeWidth="1.1"
-          opacity={0.05 + i * 0.008}
-        />
+      {hill(150, 190, 1.5, 6, "a")}
+      {hill(1060, 640, 2.1, 7, "b")}
+      {hill(1010, 90, 0.8, 4, "c")}
+      {[
+        { x: 320, y: 560, label: "▲ 412" },
+        { x: 880, y: 250, label: "▲ 1,208" },
+        { x: 120, y: 700, label: "▲ 96" },
+      ].map((m) => (
+        <text
+          key={m.label}
+          x={m.x}
+          y={m.y}
+          fill="var(--brand)"
+          opacity="0.22"
+          fontSize="12"
+          fontFamily="'Special Elite', monospace"
+          letterSpacing="2"
+        >
+          {m.label}
+        </text>
       ))}
     </svg>
   );
@@ -212,8 +268,8 @@ const LEGAL = {
   disclaimer: {
     title: "Disclaimer",
     body: [
-      "EJMapper is provided for general informational and educational purposes only. It is not professional advice of any kind — legal, medical, environmental, financial, or real-estate — and must not be relied upon for any decision about where to live, buy, rent, or invest, or about your health or safety.",
-      "Environmental indicators come from the U.S. EPA's EJScreen dataset and other public sources. When those services are unavailable, the app may display clearly-labeled estimated (\"mock\") data so the interface keeps working. Map place data comes from OpenStreetMap and may be incomplete or out of date.",
+      "Sentinal is provided for general informational and educational purposes only. It is not professional advice of any kind — legal, medical, environmental, financial, or real-estate — and must not be relied upon for any decision about where to live, buy, rent, or invest, or about your health or safety.",
+      "Environmental survey indicators come from the U.S. EPA's EJScreen dataset (v2.32), which EPA discontinued in February 2025 and which is now preserved and served by the Public Environmental Data Partners; it is a historical snapshot and is no longer updated by EPA. Live air quality and weather come from Open-Meteo, hazard alerts from the National Weather Service, and seismic data from USGS. When any service is unavailable, the app may display clearly-labeled estimated (\"mock\") data so the interface keeps working. Map place data comes from OpenStreetMap and may be incomplete or out of date.",
       "The \"report card,\" score, grade, and summaries are generated by an AI model (Claude, by Anthropic) interpreting that data and may contain errors, omissions, or misstatements. Always verify anything important against the official primary sources before acting on it.",
       "The service is provided \"as is\" and \"as available,\" without warranties of any kind, express or implied. To the fullest extent permitted by law, the operator is not liable for any loss or damage arising from use of, or reliance on, this site or its data.",
     ],
@@ -221,7 +277,7 @@ const LEGAL = {
   privacy: {
     title: "Privacy Policy",
     body: [
-      "EJMapper does not require an account and does not ask for your name, email, or any personal information.",
+      "Sentinal does not require an account and does not ask for your name, email, or any personal information.",
       "When you search a ZIP code, that ZIP code is sent to our backend and to third-party data providers (OpenStreetMap's Nominatim geocoder and the U.S. EPA) to look up results. Map tiles are loaded from Mapbox, which may receive your IP address and basic usage data under Mapbox's own privacy policy.",
       "Your recent searches are saved only in your own browser's local storage so they can be offered as shortcuts; they are never transmitted to us and you can clear them at any time by clearing your browser data.",
       "We cache results by ZIP code to reduce cost and load. This cache stores environmental data only — it contains no personal information and is not linked to you.",
@@ -232,7 +288,7 @@ const LEGAL = {
   terms: {
     title: "Terms of Use",
     body: [
-      "By using EJMapper you agree to these terms. If you do not agree, do not use the site.",
+      "By using Sentinal you agree to these terms. If you do not agree, do not use the site.",
       "The site and its data are provided \"as is\" and \"as available,\" with no warranties of any kind. We do not guarantee that the data is accurate, complete, current, or fit for any particular purpose.",
       "To the fullest extent permitted by law, the operator will not be liable for any direct, indirect, incidental, or consequential damages arising from your use of, or inability to use, the site or its data.",
       "You agree to use the site lawfully and not to abuse it — including not scraping, overloading, or attempting to disrupt or gain unauthorized access to the service or its providers.",
@@ -252,6 +308,8 @@ export default function App() {
   const [profile, setProfile] = useState("general");
   const [nearbyZips, setNearbyZips] = useState(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [liveCond, setLiveCond] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
   const [facilityPopup, setFacilityPopup] = useState(null);
   const [legalDoc, setLegalDoc] = useState(null);
   // New-feature state
@@ -272,6 +330,7 @@ export default function App() {
     setError(null);
     setHasSearched(false);
     setNearbyZips(null);
+    setLiveCond(null);
     setFacilityPopup(null);
     setPinned(null);
     setOpenInd(null);
@@ -292,6 +351,7 @@ export default function App() {
     setData(null);
     setLayers(null);
     setNearbyZips(null);
+    setLiveCond(null);
     setFacilityPopup(null);
     setOpenInd(null);
     setHasSearched(true);
@@ -318,6 +378,11 @@ export default function App() {
         .then((r) => setNearbyZips(r.data))
         .catch(() => setNearbyZips(null))
         .finally(() => setNearbyLoading(false));
+      // Live measured conditions (AQI, alerts, heat) — independent of EJScreen.
+      axios
+        .get(`${API_BASE}/api/live-conditions/${z}`)
+        .then((r) => setLiveCond(r.data))
+        .catch(() => setLiveCond(null));
     } catch (e) {
       setError(
         e.response?.data?.detail ||
@@ -383,19 +448,59 @@ export default function App() {
     }
   };
 
+  // Build a ready-to-send letter to local officials from this report's actual
+  // numbers (worst two indicators) and copy it to the clipboard.
+  const copyLetter = async () => {
+    if (!data) return;
+    const worst = INDICATORS
+      .map((ind) => ({ label: ind.label, pctl: data.percentiles?.[ind.pctl] }))
+      .filter((x) => x.pctl != null)
+      .sort((a, b) => b.pctl - a.pctl)
+      .slice(0, 2);
+    const bullets = worst
+      .map((w) => `  • ${w.label}: worse than ${Math.round(w.pctl)}% of the United States`)
+      .join("\n");
+    const letter =
+`Dear [Council member / Representative],
+
+I am a resident of zip code ${data.zip_code}. According to EPA EJScreen data (v2.32), our neighborhood carries an environmental burden score of ${rc?.score ?? "—"} out of 100 (grade ${rc?.grade ?? "—"}), including:
+
+${bullets}
+
+I am asking you to: (1) tell residents what monitoring and enforcement is currently happening here, (2) support increased air and water monitoring in our area, and (3) prioritize our neighborhood for environmental remediation funding.
+
+I would welcome a response describing concrete steps.
+
+Respectfully,
+[Your name]
+[Your street address]`;
+    try {
+      await navigator.clipboard.writeText(letter);
+      setActionMsg("Letter copied — paste it into an email");
+    } catch {
+      setActionMsg("Copy blocked by the browser");
+    }
+    setTimeout(() => setActionMsg(null), 3000);
+  };
+
   const onKey = (e) => e.key === "Enter" && search();
 
   const rc = data?.report_card;
   const displayScore = useCountUp(rc?.score ?? null);
   const comparing = pinned && data && pinned.zip !== data.zip_code;
 
-  const childScore = data
-    ? Math.round(
-        (data.percentiles?.lead_paint_pctile_national ?? 50) * 0.4 +
-        (data.percentiles?.traffic_pctile_national ?? 50) * 0.35 +
-        (data.percentiles?.cancer_risk_pctile_national ?? 50) * 0.25
-      )
-    : null;
+  // Children's Health Index: computed ONLY when all three inputs exist — a
+  // missing percentile must show as "no data", never silently default to 50
+  // and masquerade as a real score.
+  const childInputs = [
+    data?.percentiles?.lead_paint_pctile_national,
+    data?.percentiles?.traffic_pctile_national,
+    data?.percentiles?.no2_pctile_national,
+  ];
+  const childScore =
+    data && childInputs.every((v) => v != null)
+      ? Math.round(childInputs[0] * 0.4 + childInputs[1] * 0.35 + childInputs[2] * 0.25)
+      : null;
   const childSev = severity(childScore);
   // Color the score dial by the report's letter grade (falling back to the
   // score-based severity scale), so dial, pill, marker, and scale stay consistent.
@@ -425,7 +530,11 @@ export default function App() {
   const footer = (
     <footer className="site-footer">
       <p className="footer-attrib">
-        Environmental data: U.S. EPA EJScreen. Maps &amp; place data:{" "}
+        Environmental survey data: EPA EJScreen v2.32, preserved by the{" "}
+        <a href="https://screening-tools.com/epa-ejscreen" target="_blank" rel="noopener noreferrer">Public Environmental Data Partners</a>{" "}
+        (EPA discontinued EJScreen in 2025). Live air quality &amp; weather by{" "}
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a>.
+        Hazard alerts: National Weather Service. Seismic data: USGS. Maps &amp; place data:{" "}
         <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
         Geocoding by OpenStreetMap Nominatim.
@@ -450,7 +559,7 @@ export default function App() {
         <div className="landing-hero">
           <ContourBackground />
           <div className="hero-inner">
-            <h1 className="wordmark">EJMapper</h1>
+            <h1 className="wordmark">Sentinal</h1>
             <p className="tagline">Environmental justice by zip code</p>
             <p className="hero-lead">
               Every neighborhood has an environmental story. Enter a zip code to
@@ -482,7 +591,7 @@ export default function App() {
 
             <div className="landing-facts">
               <div className="landing-fact">
-                <span className="fact-num">12</span>
+                <span className="fact-num">13</span>
                 <span className="fact-label">Environmental indicators tracked</span>
               </div>
               <div className="landing-fact">
@@ -490,8 +599,8 @@ export default function App() {
                 <span className="fact-label">Plain-language grade for every zip</span>
               </div>
               <div className="landing-fact">
-                <span className="fact-num">EPA</span>
-                <span className="fact-label">Data sourced from EJScreen</span>
+                <span className="fact-num">LIVE</span>
+                <span className="fact-label">Real-time air quality &amp; official hazard alerts</span>
               </div>
             </div>
 
@@ -510,7 +619,7 @@ export default function App() {
         <>
           <header className="topbar">
             <button type="button" className="topbar-logo" onClick={reset} title="Start over">
-              EJMapper
+              Sentinal
             </button>
             {searchBox(false)}
             <div className="topbar-profiles" role="group" aria-label="Audience profile">
@@ -570,7 +679,8 @@ export default function App() {
                 <div className="report" key={`${data.zip_code}-${profile}`}>
                   {data.data_source === "mock" && (
                     <div className="banner mock">
-                      Showing estimated data — the EPA EJScreen service is temporarily offline.
+                      Showing estimated data — the EJScreen data service is unreachable
+                      right now. These numbers are plausible placeholders, not measurements.
                     </div>
                   )}
 
@@ -611,6 +721,92 @@ export default function App() {
                         {pinned.grade ?? "—"}. Thin bars below show {pinned.zip}.
                       </span>
                       <button type="button" onClick={() => setPinned(null)}>Unpin</button>
+                    </div>
+                  )}
+
+                  {/* ── Live conditions — measured data, independent of EJScreen ── */}
+                  {liveCond && (liveCond.air || liveCond.weather || liveCond.alerts) && (
+                    <div className="live-panel">
+                      <div className="live-head">
+                        <span className="live-dot" aria-hidden="true" />
+                        <span className="live-title">Right now in {data.zip_code}</span>
+                        <span className="live-sub">live measured conditions</span>
+                      </div>
+
+                      {liveCond.alerts?.length > 0 && (
+                        <div className="alerts">
+                          {liveCond.alerts.map((a, i) => (
+                            <div
+                              key={i}
+                              className={`alert sev-${(a.severity || "unknown").toLowerCase()}`}
+                            >
+                              <span className="alert-event">⚠ {a.event}</span>
+                              {a.headline && <span className="alert-headline">{a.headline}</span>}
+                              {a.instruction && <span className="alert-instr">{a.instruction}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="live-grid">
+                        {liveCond.air?.us_aqi != null && (() => {
+                          const band = aqiBand(liveCond.air.us_aqi);
+                          return (
+                            <div className="live-cell live-aqi" style={{ "--aqi-color": band.color }}>
+                              <div className="live-aqi-top">
+                                <span className="live-num">{Math.round(liveCond.air.us_aqi)}</span>
+                                <div className="live-aqi-meta">
+                                  <span className="live-cell-label">Air quality index</span>
+                                  <span className="live-aqi-cat">{band.label}</span>
+                                </div>
+                              </div>
+                              <p className="live-advice">{band.advice}</p>
+                              <div className="live-pollutants">
+                                {liveCond.air.pm2_5 != null && <span>PM2.5 {liveCond.air.pm2_5} µg/m³</span>}
+                                {liveCond.air.ozone != null && <span>O₃ {liveCond.air.ozone} µg/m³</span>}
+                                {liveCond.air.nitrogen_dioxide != null && <span>NO₂ {liveCond.air.nitrogen_dioxide} µg/m³</span>}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        {liveCond.weather?.days?.length > 0 && (
+                          <div className="live-cell">
+                            <span className="live-cell-label">3-day outlook (NWS)</span>
+                            <div className="live-days">
+                              {liveCond.weather.days.map((d) => (
+                                <div className="live-day" key={d.date}>
+                                  <span className="live-day-date">
+                                    {new Date(d.date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}
+                                  </span>
+                                  <span className="live-day-temp">
+                                    {d.high_f != null ? `${Math.round(d.high_f)}°F` : "—"}
+                                  </span>
+                                  <span className="live-day-uv">{d.short || ""}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {liveCond.weather.days.some((d) => d.high_f >= 95) && (
+                              <p className="live-advice">High heat expected — check on elderly neighbors and limit midday exertion.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {liveCond.alerts && liveCond.alerts.length === 0 && (
+                        <p className="live-noalerts">
+                          ✓ No active weather hazard alerts for this area right now.
+                        </p>
+                      )}
+                      {liveCond.quakes?.count_30d > 0 && liveCond.quakes.strongest && (
+                        <p className="live-quakes">
+                          {liveCond.quakes.count_30d} earthquake{liveCond.quakes.count_30d > 1 ? "s" : ""} (M2.5+)
+                          within 200 km in the past 30 days — strongest M{liveCond.quakes.strongest.mag}{" "}
+                          {liveCond.quakes.strongest.place}.
+                        </p>
+                      )}
+                      <p className="live-attrib">
+                        Air &amp; weather by Open-Meteo.com · Alerts: National Weather Service · Seismic: USGS
+                      </p>
                     </div>
                   )}
 
@@ -662,9 +858,16 @@ export default function App() {
                     <div className="child-index-body">
                       <div className="child-index-title">Children's Health Index</div>
                       <p className="child-index-desc">
-                        Weighted score combining lead paint exposure (40%), traffic pollution
-                        (35%), and air toxics cancer risk (25%) — the three indicators most
-                        linked to childhood health outcomes. Higher = more risk.
+                        {childScore != null ? (
+                          <>
+                            This app's weighted score combining lead paint exposure (40%),
+                            traffic pollution (35%), and nitrogen dioxide (25%) — three
+                            indicators strongly associated with children's environmental
+                            health. Higher = more risk.
+                          </>
+                        ) : (
+                          <>Not enough data to compute this index for this area.</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -737,6 +940,37 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Take-action toolkit — turn the report into pressure */}
+                  <div className="section">
+                    <h3>Take action</h3>
+                    <p className="section-hint">Turn this report into something officials have to answer.</p>
+                    <div className="action-tools">
+                      <button type="button" className="tool-btn primary" onClick={copyLetter}>
+                        ✉ {actionMsg ?? "Copy a letter to your officials"}
+                      </button>
+                      <a
+                        className="tool-btn"
+                        href="https://echo.epa.gov/report-environmental-violations"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        ⚑ Report a violation to EPA
+                      </a>
+                      <a
+                        className="tool-btn"
+                        href="https://www.usa.gov/elected-officials"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        ☖ Find your elected officials
+                      </a>
+                    </div>
+                    <p className="action-note">
+                      The letter is pre-filled with this report's actual numbers — paste it
+                      into an email, add your name, and send.
+                    </p>
+                  </div>
+
                   {/* Nearby zip comparison */}
                   <div className="section">
                     <h3>How does this area compare nearby?</h3>
@@ -770,6 +1004,12 @@ export default function App() {
                     )}
                     {nearbyZips && nearbyZips.zips.length === 0 && (
                       <p className="map-note">No nearby zip codes found for comparison.</p>
+                    )}
+                    {nearbyZips && nearbyZips.data_source && nearbyZips.data_source !== "live" && (
+                      <p className="map-note">
+                        ⚠ Nearby grades currently use estimated data — the EJScreen data
+                        service is unreachable. They are directional, not measured.
+                      </p>
                     )}
                   </div>
 
@@ -806,6 +1046,7 @@ export default function App() {
                           lat: feature.geometry.coordinates[1],
                           name: feature.properties.name,
                           type: feature.properties.type,
+                          source: feature.properties.source,
                         });
                       } else {
                         setFacilityPopup(null);
@@ -843,14 +1084,23 @@ export default function App() {
                           <span className={`facility-popup-status ${facilityPopup.type === "Recent violation" ? "violation" : ""}`}>
                             {facilityPopup.type}
                           </span>
-                          <a
-                            className="facility-popup-link"
-                            href={`https://echo.epa.gov/facilities/facility-search/results?p_fn=${encodeURIComponent(facilityPopup.name)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            View on EPA ECHO
-                          </a>
+                          {facilityPopup.source === "mock" ? (
+                            // Estimated markers are not real facilities — never link
+                            // them to an EPA lookup that would come back empty.
+                            <span className="facility-popup-note">
+                              Estimated location shown while the EPA facility service is
+                              unreachable — not a specific real facility.
+                            </span>
+                          ) : (
+                            <a
+                              className="facility-popup-link"
+                              href={`https://echo.epa.gov/facilities/facility-search/results?p_fn=${encodeURIComponent(facilityPopup.name)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View on EPA ECHO
+                            </a>
+                          )}
                         </div>
                       </Popup>
                     )}
@@ -867,8 +1117,9 @@ export default function App() {
                     <button
                       className={`chip air ${visible.air ? "on" : ""}`}
                       onClick={() => toggle("air")}
+                      title="A modeled gradient from the area-wide EPA percentile — not station measurements"
                     >
-                      <span className="swatch" /> Air quality
+                      <span className="swatch" /> Air burden (modeled)
                     </button>
                     <button
                       className={`chip fac ${visible.facilities ? "on" : ""}`}
