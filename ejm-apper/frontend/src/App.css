@@ -1280,6 +1280,68 @@
 .chip.air.on .swatch { background: linear-gradient(90deg, #e8d69a, #a9791c); }
 .chip.fac.on .swatch { background: #1d6b66; border-radius: 50%; }
 .chip.park.on .swatch { background: #2f8f52; }
+.chip.heat.on .swatch { background: linear-gradient(90deg, #e8d69a, #8a1620); }
+.chip.canopy.on .swatch { background: linear-gradient(90deg, #a8d3b2, #1c5f37); }
+.chip.vuln.on .swatch { background: linear-gradient(90deg, #c9a884, #5c0e16); }
+
+/* ── Choropleth legend (bottom-right of the map pane) ────────────────────── */
+.heat-legend {
+  position: absolute;
+  bottom: 30px;
+  right: 14px;
+  z-index: 5;
+  width: 210px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--border-ink);
+  border-radius: var(--wobble-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px 9px;
+}
+.heat-legend-title {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 7px;
+}
+.heat-legend-bar {
+  height: 9px;
+  border-radius: 3px;
+  border: 1px solid rgba(29, 74, 72, 0.3);
+}
+.heat-legend-ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.heat-legend-note {
+  font-size: 10.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+}
+
+/* Zip choropleth popup rows */
+.zip-popup-row {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.zip-popup-row b { color: var(--text); font-weight: 600; }
+.zip-popup-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+}
 
 /* ── Children's Health Index — a pressed-flower annotation card ──────────── */
 .child-index {

@@ -45,6 +45,17 @@ def load_sa_zips() -> tuple[dict, ...]:
     return tuple(raw["zips"])
 
 
+@lru_cache(maxsize=1)
+def load_zcta_boundaries() -> dict:
+    """
+    Bexar-area ZCTA polygons (Census TIGERweb 2020, generalized ~30 m),
+    committed at backend/data/bexar_zcta_boundaries.geojson. Each feature's
+    properties carry only {"zip"}; /api/heat-layers merges metric values in.
+    """
+    return json.loads(
+        (DATA_DIR / "bexar_zcta_boundaries.geojson").read_text(encoding="utf-8"))
+
+
 def _corner_cells(lat: float, lon: float) -> list[tuple[tuple[float, float], float]]:
     """
     The four POWER grid-cell centers surrounding a point, each paired with its

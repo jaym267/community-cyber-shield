@@ -36,7 +36,7 @@ from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
 from acs_api import generate_mock_acs, get_acs_zcta_data
 from canopy_data import get_canopy_data
-from heat_api import get_heat_data, load_sa_zips
+from heat_api import get_heat_data, load_sa_zips, load_zcta_boundaries
 from heat_vulnerability import WEIGHTS, compute_vulnerability
 from mock_data import generate_mock_ejscreen
 
@@ -619,6 +619,80 @@ async def heat_vulnerability_endpoint(request: Request):
             "canopy": canopy["source"],
             "acs": acs["source"],
         },
+    }
+    all_good = (heat["source"] == "live" and acs["source"] == "live"
+                and canopy["source"] == "static_estimate")
+    cache_set(cache_key, result,
+              ttl=_CACHE_TTL_SECONDS if all_good else _CACHE_TTL_MOCK_SECONDS)
+    return result
+
+
+# ── Heat-layers route (choropleth GeoJSON: boundaries merged with values) ─────
+# One FeatureCollection with temp/canopy/vulnerability as feature properties,
+# so the frontend needs a single Mapbox Source for all three choropleths.
+
+@app.get("/api/heat-layers")
+@limiter.limit("20/minute")
+async def heat_layers_endpoint(request: Request):
+    """Bexar ZCTA polygons with temp_f / canopy_pct / vuln_score properties."""
+    cache_key = "heat-layers:sa"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        logger.info("cache HIT %s", cache_key)
+        return cached
+    logger.info("cache MISS %s", cache_key)
+
+    heat = await _heat_cached()
+    canopy = get_canopy_data()
+    acs = await _acs_cached()
+    all_zips = [z["zip"] for z in load_sa_zips()]
+    vuln = compute_vulnerability(heat["zips"], canopy["zips"], acs["zips"], all_zips)
+
+    boundaries = load_zcta_boundaries()
+    features = []
+    stats: dict[str, dict] = {}
+
+    def track(metric: str, value):
+        if value is None:
+            return
+        s = stats.setdefault(metric, {"min": value, "max": value})
+        s["min"] = min(s["min"], value)
+        s["max"] = max(s["max"], value)
+
+    for f in boundaries["features"]:
+        z = f["properties"]["zip"]
+        temp = heat["zips"].get(z)
+        can = canopy["zips"].get(z)
+        score = (vuln.get(z) or {}).get("score")
+        track("temp_f", temp)
+        track("canopy_pct", can)
+        track("vuln_score", score)
+        features.append({
+            "type": "Feature",
+            "geometry": f["geometry"],
+            "properties": {
+                "zip": z, "temp_f": temp, "canopy_pct": can, "vuln_score": score,
+            },
+        })
+
+    result = {
+        "type": "FeatureCollection",
+        "features": features,
+        "stats": stats,
+        "sources": {
+            "heat": heat["source"],
+            "canopy": canopy["source"],
+            "acs": acs["source"],
+        },
+        "metric_notes": {
+            "temp_f": heat.get("metric_note"),
+            "canopy_pct": canopy.get("metric_note"),
+            "vuln_score": (
+                "Composite of temperature, canopy, and Census demographics — "
+                "see /api/heat-vulnerability for the formula."
+            ),
+        },
+        "sa_zips": all_zips,
     }
     all_good = (heat["source"] == "live" and acs["source"] == "live"
                 and canopy["source"] == "static_estimate")

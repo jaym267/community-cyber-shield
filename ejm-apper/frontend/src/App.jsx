@@ -3,6 +3,7 @@ import axios from "axios";
 import Map, { Marker, Source, Layer, Popup } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./App.css";
+import HeatLegend from "./HeatLegend.jsx";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // API base: set VITE_API_BASE to the deployed backend URL in production;
@@ -159,6 +160,44 @@ const greenLineLayer = {
   paint: { "line-color": "#1d6b66", "line-width": 1.5 },
 };
 
+// ── Heat / canopy / vulnerability choropleths (San Antonio region) ──────────
+// Monotonic-lightness ramps in the Watchtower palette (colorblind-friendly;
+// no purple/white/orange). Must stay in sync with HeatLegend.jsx.
+const HEAT_RAMPS = {
+  temp_f: ["#e8d69a", "#cba33c", "#a9791c", "#95401f", "#8a1620"],
+  canopy_pct: ["#e9e6da", "#a8d3b2", "#5fae77", "#2f8f52", "#1c5f37"],
+  vuln_score: ["#e3ded0", "#c9a884", "#95401f", "#8a1620", "#5c0e16"],
+};
+
+// Fill paint for one metric, with stops built from the response's real
+// min/max. Nulls (zips missing that metric) render neutral stone = "no data".
+function heatFillPaint(metric, stats) {
+  const s = stats?.[metric] ?? { min: 0, max: 1 };
+  const span = s.max - s.min || 1;
+  const colors = HEAT_RAMPS[metric];
+  const stops = colors.flatMap((c, i) => [s.min + (span * i) / (colors.length - 1), c]);
+  return {
+    "fill-opacity": 0.6,
+    "fill-color": [
+      "case",
+      ["==", ["coalesce", ["get", metric], -9999], -9999],
+      "#e9e6da",
+      ["interpolate", ["linear"], ["get", metric], ...stops],
+    ],
+  };
+}
+
+const heatOutlinePaint = {
+  "line-color": "#1d4a48",
+  "line-width": 0.8,
+  "line-opacity": 0.45,
+};
+
+// The three choropleth toggles are mutually exclusive — stacking translucent
+// choropleths reads as mud, so turning one on turns the others off.
+const HEAT_TOGGLE_KEYS = ["heat", "canopy", "vuln"];
+const METRIC_FOR_TOGGLE = { heat: "temp_f", canopy: "canopy_pct", vuln: "vuln_score" };
+
 // Average the three air-pollution percentiles to drive heatmap intensity.
 function airIntensity(percentiles) {
   const vals = [
@@ -301,7 +340,10 @@ export default function App() {
   const [zip, setZip] = useState("");
   const [data, setData] = useState(null);
   const [layers, setLayers] = useState(null);
-  const [visible, setVisible] = useState({ air: true, facilities: true, parks: true });
+  const [visible, setVisible] = useState({
+    air: true, facilities: true, parks: true,
+    heat: false, canopy: false, vuln: false,   // choropleths default off
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -310,6 +352,8 @@ export default function App() {
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [liveCond, setLiveCond] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
+  const [heatLayers, setHeatLayers] = useState(null); // SA-only choropleth data
+  const [zipPopup, setZipPopup] = useState(null);     // clicked choropleth zip
   const [facilityPopup, setFacilityPopup] = useState(null);
   const [legalDoc, setLegalDoc] = useState(null);
   // New-feature state
@@ -321,7 +365,14 @@ export default function App() {
 
   const mapRef = useRef(null);
 
-  const toggle = (key) => setVisible((v) => ({ ...v, [key]: !v[key] }));
+  const toggle = (key) =>
+    setVisible((v) => {
+      const next = { ...v, [key]: !v[key] };
+      if (HEAT_TOGGLE_KEYS.includes(key) && next[key]) {
+        for (const k of HEAT_TOGGLE_KEYS) if (k !== key) next[k] = false;
+      }
+      return next;
+    });
 
   const reset = () => {
     setZip("");
@@ -332,6 +383,7 @@ export default function App() {
     setNearbyZips(null);
     setLiveCond(null);
     setFacilityPopup(null);
+    setZipPopup(null);
     setPinned(null);
     setOpenInd(null);
     setMapCenter(null);
@@ -383,6 +435,13 @@ export default function App() {
         .get(`${API_BASE}/api/live-conditions/${z}`)
         .then((r) => setLiveCond(r.data))
         .catch(() => setLiveCond(null));
+      // Heat/canopy/vulnerability choropleths — region-scoped (San Antonio);
+      // chips only appear when the searched zip is in the covered set.
+      setZipPopup(null);
+      axios
+        .get(`${API_BASE}/api/heat-layers`)
+        .then((r) => setHeatLayers(r.data))
+        .catch(() => setHeatLayers(null));
     } catch (e) {
       setError(
         e.response?.data?.detail ||
@@ -489,6 +548,13 @@ Respectfully,
   const displayScore = useCountUp(rc?.score ?? null);
   const comparing = pinned && data && pinned.zip !== data.zip_code;
 
+  // Heat choropleths only exist for the San Antonio region — gate all their
+  // UI on the searched zip being in the covered set.
+  const inHeatRegion = !!(data && heatLayers?.sa_zips?.includes(data.zip_code));
+  const activeHeatToggle = HEAT_TOGGLE_KEYS.find((k) => visible[k]) ?? null;
+  const activeHeatMetric =
+    inHeatRegion && activeHeatToggle ? METRIC_FOR_TOGGLE[activeHeatToggle] : null;
+
   // Children's Health Index: computed ONLY when all three inputs exist — a
   // missing percentile must show as "no data", never silently default to 50
   // and masquerade as a real score.
@@ -534,7 +600,8 @@ Respectfully,
         <a href="https://screening-tools.com/epa-ejscreen" target="_blank" rel="noopener noreferrer">Public Environmental Data Partners</a>{" "}
         (EPA discontinued EJScreen in 2025). Live air quality &amp; weather by{" "}
         <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a>.
-        Hazard alerts: National Weather Service. Seismic data: USGS. Maps &amp; place data:{" "}
+        Hazard alerts: National Weather Service. Seismic data: USGS. Heat layer: NASA POWER.
+        Tree canopy: NLCD 2021 (USFS/MRLC). Demographics: US Census Bureau ACS. Maps &amp; place data:{" "}
         <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
         Geocoding by OpenStreetMap Nominatim.
@@ -1037,10 +1104,14 @@ Respectfully,
                     style={{ width: "100%", height: "100%" }}
                     mapStyle="mapbox://styles/mapbox/light-v11"
                     mapboxAccessToken={MAPBOX_TOKEN}
-                    interactiveLayerIds={layers ? ["facilities-circle"] : []}
+                    interactiveLayerIds={[
+                      ...(layers ? ["facilities-circle"] : []),
+                      ...(heatLayers && activeHeatMetric ? ["heat-fill"] : []),
+                    ]}
                     onClick={(e) => {
                       const feature = e.features?.[0];
                       if (feature?.layer?.id === "facilities-circle") {
+                        setZipPopup(null);
                         setFacilityPopup({
                           lon: feature.geometry.coordinates[0],
                           lat: feature.geometry.coordinates[1],
@@ -1048,12 +1119,31 @@ Respectfully,
                           type: feature.properties.type,
                           source: feature.properties.source,
                         });
+                      } else if (feature?.layer?.id === "heat-fill") {
+                        setFacilityPopup(null);
+                        setZipPopup({
+                          lon: e.lngLat.lng,
+                          lat: e.lngLat.lat,
+                          ...feature.properties,
+                        });
                       } else {
                         setFacilityPopup(null);
+                        setZipPopup(null);
                       }
                     }}
-                    cursor={facilityPopup ? "pointer" : ""}
+                    cursor={facilityPopup || zipPopup ? "pointer" : ""}
                   >
+                    {/* Choropleth first so it renders under markers/circles */}
+                    {heatLayers && activeHeatMetric && (
+                      <Source id="heat-zips" type="geojson" data={heatLayers}>
+                        <Layer
+                          id="heat-fill"
+                          type="fill"
+                          paint={heatFillPaint(activeHeatMetric, heatLayers.stats)}
+                        />
+                        <Layer id="heat-outline" type="line" paint={heatOutlinePaint} />
+                      </Source>
+                    )}
                     {layers && visible.parks && (
                       <Source id="green" type="geojson" data={layers.green_spaces}>
                         <Layer {...greenFillLayer} />
@@ -1104,6 +1194,37 @@ Respectfully,
                         </div>
                       </Popup>
                     )}
+                    {zipPopup && (
+                      <Popup
+                        longitude={zipPopup.lon}
+                        latitude={zipPopup.lat}
+                        onClose={() => setZipPopup(null)}
+                        closeOnClick={false}
+                        anchor="bottom"
+                      >
+                        <div className="facility-popup">
+                          <strong className="facility-popup-name">Zip {zipPopup.zip}</strong>
+                          <span className="zip-popup-row">
+                            Avg daily high: <b>{zipPopup.temp_f != null ? `${zipPopup.temp_f}°F` : "—"}</b>
+                          </span>
+                          <span className="zip-popup-row">
+                            Tree canopy: <b>{zipPopup.canopy_pct != null ? `${zipPopup.canopy_pct}%` : "—"}</b>
+                          </span>
+                          <span className="zip-popup-row">
+                            Heat vulnerability: <b>{zipPopup.vuln_score ?? "—"}</b>/100
+                          </span>
+                          {zipPopup.zip !== data.zip_code && (
+                            <button
+                              type="button"
+                              className="facility-popup-link zip-popup-btn"
+                              onClick={() => { setZipPopup(null); search(zipPopup.zip); }}
+                            >
+                              Open this zip's report
+                            </button>
+                          )}
+                        </div>
+                      </Popup>
+                    )}
                   </Map>
 
                   {/* Overlays */}
@@ -1135,7 +1256,40 @@ Respectfully,
                       <span className="swatch" /> Green spaces
                       {layers && ` (${layers.green_spaces.features.length})`}
                     </button>
+                    {inHeatRegion && (
+                      <>
+                        <button
+                          className={`chip heat ${visible.heat ? "on" : ""}`}
+                          onClick={() => toggle("heat")}
+                          title="30-day avg daily max air temperature (NASA POWER, interpolated ~50km grid)"
+                        >
+                          <span className="swatch" /> Heat (air temp)
+                        </button>
+                        <button
+                          className={`chip canopy ${visible.canopy ? "on" : ""}`}
+                          onClick={() => toggle("canopy")}
+                          title="Mean NLCD 2021 tree canopy per zip — static estimate"
+                        >
+                          <span className="swatch" /> Tree canopy (est.)
+                        </button>
+                        <button
+                          className={`chip vuln ${visible.vuln ? "on" : ""}`}
+                          onClick={() => toggle("vuln")}
+                          title="Composite of temperature, canopy, and Census demographics"
+                        >
+                          <span className="swatch" /> Heat vulnerability
+                        </button>
+                      </>
+                    )}
                   </div>
+                  {activeHeatMetric && heatLayers && (
+                    <HeatLegend
+                      metric={activeHeatMetric}
+                      stats={heatLayers.stats}
+                      ramp={HEAT_RAMPS[activeHeatMetric]}
+                      sources={heatLayers.sources}
+                    />
+                  )}
                   {layers &&
                     (layers.facilities.source === "mock" ||
                       layers.green_spaces.source === "mock") && (
