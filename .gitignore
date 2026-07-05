@@ -1,0 +1,11 @@
+# Claude Code / skills tooling (local dev environment, not project source)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Downloaded data artifacts / scratch
+mrlc_wcs.xml
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
