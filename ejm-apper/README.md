@@ -43,11 +43,22 @@ EJMapper is an AI-powered web app that shows you the environmental health of any
 | NLCD / MRLC     | Tree canopy layer (`/api/canopy`): mean NLCD Tree Canopy Cover 2021 per SA zip, computed offline via MRLC's public WCS and committed as a static dataset. Static estimates, 2021 vintage. | No |
 | Census ACS 5-yr | Heat-vulnerability demographics (`/api/heat-vulnerability`): % population 65+, median household income, median housing year built, per ZCTA (2023 vintage). | Yes (free, instant: api.census.gov/data/key_signup.html — set `CENSUS_API_KEY`; without it this component serves labeled mock data) |
 
-### Heat vulnerability score (`/api/heat-vulnerability`)
+### Heat vulnerability score
 
-Composite 0–100 score per San Antonio-area zip. Each component is min-max
-normalized 0–1 **across the SA zip set**, inverted where needed so 1 = more
-vulnerable, then weighted and summed:
+Works **anywhere in the US**: `GET /api/heat-layers/{zip}` builds the
+choropleth dataset on demand for every ZCTA within ~12 miles of the searched
+zip — boundaries from Census TIGERweb at runtime, heat from NASA POWER
+(unique ~50 km grid cells cached 24 h and shared between overlapping
+regions), tree canopy zonal means computed on demand from MRLC's public NLCD
+WCS (San Antonio uses precomputed values), and ACS demographics per region.
+Scores are normalized **across the region** — they compare nearby zips, not
+the whole country (the right framing for urban-heat-island questions).
+`/api/heat`, `/api/canopy`, and `/api/heat-vulnerability` remain as San
+Antonio regional endpoints.
+
+Composite 0–100 score per zip. Each component is min-max normalized 0–1
+across the region's zip set, inverted where needed so 1 = more vulnerable,
+then weighted and summed:
 
 | Component | Weight | Direction |
 |-----------|--------|-----------|

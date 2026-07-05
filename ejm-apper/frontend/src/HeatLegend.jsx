@@ -13,13 +13,13 @@ const META = {
   canopy_pct: {
     title: "Tree canopy",
     unit: "%",
-    note: "Static NLCD 2021 estimate — reads urban canopy conservatively vs. LiDAR.",
+    note: "NLCD 2021 zonal estimate — reads urban canopy conservatively vs. LiDAR.",
     fmt: (v) => `${v.toFixed(0)}%`,
   },
   vuln_score: {
     title: "Heat vulnerability",
     unit: "/100",
-    note: "Composite of temperature, canopy, and Census demographics.",
+    note: "Composite of temperature, canopy, and Census demographics — scores compare zips within this region, not nationally.",
     fmt: (v) => `${Math.round(v)}`,
   },
 };

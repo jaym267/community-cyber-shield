@@ -36,8 +36,18 @@ from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
 from acs_api import generate_mock_acs, get_acs_zcta_data
 from canopy_data import get_canopy_data
-from heat_api import get_heat_data, load_sa_zips, load_zcta_boundaries
+from heat_api import get_heat_data, load_sa_zips
 from heat_vulnerability import WEIGHTS, compute_vulnerability
+from region_layers import (
+    REGION_RADIUS_MI,
+    acs_for_zips,
+    canopy_for_region,
+    heat_for_zips,
+    load_us_centroids,
+    polygons_for_zips,
+    region_key,
+    region_zips,
+)
 from mock_data import generate_mock_ejscreen
 
 logger = logging.getLogger("ejmapper")
@@ -627,28 +637,51 @@ async def heat_vulnerability_endpoint(request: Request):
     return result
 
 
-# ── Heat-layers route (choropleth GeoJSON: boundaries merged with values) ─────
-# One FeatureCollection with temp/canopy/vulnerability as feature properties,
-# so the frontend needs a single Mapbox Source for all three choropleths.
+# ── Heat-layers route (regional choropleth GeoJSON, anywhere in the US) ───────
+# One FeatureCollection with temp/canopy/vulnerability as feature properties
+# for every ZCTA within ~12 miles of the searched zip. Vulnerability scores
+# are normalized ACROSS THE REGION — "relative to nearby zips", the honest
+# framing for urban-heat-island comparisons. Regions quantized to 0.1° share
+# a cache entry; POWER grid cells are cached individually inside
+# region_layers so overlapping regions never refetch them.
 
-@app.get("/api/heat-layers")
+@app.get("/api/heat-layers/{zip_code}")
 @limiter.limit("20/minute")
-async def heat_layers_endpoint(request: Request):
-    """Bexar ZCTA polygons with temp_f / canopy_pct / vuln_score properties."""
-    cache_key = "heat-layers:sa"
+async def heat_layers_endpoint(request: Request, zip_code: str):
+    """Regional ZCTA polygons with temp_f / canopy_pct / vuln_score properties."""
+    require_zip(zip_code)
+
+    center = load_us_centroids().get(zip_code)
+    if center is None:
+        # Not a known ZCTA (PO-box-only zips etc.) — fall back to geocoding.
+        lat, lon = await resolve_zip(zip_code)
+    else:
+        lat, lon = center
+
+    rkey = region_key(lat, lon)
+    cache_key = f"region-layers:{rkey}"
     cached = cache_get(cache_key)
     if cached is not None:
         logger.info("cache HIT %s", cache_key)
         return cached
     logger.info("cache MISS %s", cache_key)
 
-    heat = await _heat_cached()
-    canopy = get_canopy_data()
-    acs = await _acs_cached()
-    all_zips = [z["zip"] for z in load_sa_zips()]
-    vuln = compute_vulnerability(heat["zips"], canopy["zips"], acs["zips"], all_zips)
+    zips = region_zips(lat, lon)
+    if not zips:
+        return {"type": "FeatureCollection", "features": [], "stats": {},
+                "sources": {}, "region_zips": [], "region": {"key": rkey}}
+    zip_list = [z["zip"] for z in zips]
 
-    boundaries = load_zcta_boundaries()
+    # Boundaries + heat + demographics in parallel; canopy afterwards because
+    # it needs the polygons. Each source degrades independently.
+    polygons, (heat_zips, heat_src), (acs_zips, acs_src) = await asyncio.gather(
+        polygons_for_zips(zip_list),
+        heat_for_zips(zips),
+        acs_for_zips(zip_list),
+    )
+    canopy_zips, canopy_src = await canopy_for_region(polygons, zip_list)
+    vuln = compute_vulnerability(heat_zips, canopy_zips, acs_zips, zip_list)
+
     features = []
     stats: dict[str, dict] = {}
 
@@ -659,10 +692,12 @@ async def heat_layers_endpoint(request: Request):
         s["min"] = min(s["min"], value)
         s["max"] = max(s["max"], value)
 
-    for f in boundaries["features"]:
-        z = f["properties"]["zip"]
-        temp = heat["zips"].get(z)
-        can = canopy["zips"].get(z)
+    for f in (polygons or {}).get("features", []):
+        z = f.get("properties", {}).get("ZCTA5")
+        if z not in set(zip_list):
+            continue
+        temp = heat_zips.get(z)
+        can = canopy_zips.get(z)
         score = (vuln.get(z) or {}).get("score")
         track("temp_f", temp)
         track("canopy_pct", can)
@@ -680,22 +715,31 @@ async def heat_layers_endpoint(request: Request):
         "features": features,
         "stats": stats,
         "sources": {
-            "heat": heat["source"],
-            "canopy": canopy["source"],
-            "acs": acs["source"],
+            "heat": heat_src,
+            "canopy": canopy_src,
+            "acs": acs_src,
+            "boundaries": "live" if polygons else "unavailable",
         },
         "metric_notes": {
-            "temp_f": heat.get("metric_note"),
-            "canopy_pct": canopy.get("metric_note"),
+            "temp_f": (
+                "30-day avg daily max AIR temperature (NASA POWER), bilinearly "
+                "interpolated from a ~50 km grid — not land-surface temperature."
+            ),
+            "canopy_pct": (
+                "Mean NLCD 2021 tree canopy per zip — estimates (static for "
+                "San Antonio, computed on demand elsewhere)."
+            ),
             "vuln_score": (
-                "Composite of temperature, canopy, and Census demographics — "
-                "see /api/heat-vulnerability for the formula."
+                "Composite of temperature, canopy, and Census demographics, "
+                "normalized across this region — scores compare nearby zips, "
+                "not the whole country."
             ),
         },
-        "sa_zips": all_zips,
+        "region_zips": zip_list,
+        "region": {"key": rkey, "center": {"lat": lat, "lon": lon},
+                   "radius_mi": REGION_RADIUS_MI},
     }
-    all_good = (heat["source"] == "live" and acs["source"] == "live"
-                and canopy["source"] == "static_estimate")
+    all_good = bool(features) and heat_src == "live" and acs_src == "live"
     cache_set(cache_key, result,
               ttl=_CACHE_TTL_SECONDS if all_good else _CACHE_TTL_MOCK_SECONDS)
     return result

@@ -4,3 +4,9 @@ httpx==0.27.2
 anthropic==0.34.2
 python-dotenv==1.0.1
 slowapi==0.1.9
+# Runtime zonal stats for the national tree-canopy layer (region_layers.py).
+# If unavailable, the app still runs — canopy degrades to missing outside
+# San Antonio and the vulnerability weights renormalize.
+numpy==2.5.1
+rasterio==1.5.0
+shapely==2.1.2

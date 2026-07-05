@@ -435,11 +435,14 @@ export default function App() {
         .get(`${API_BASE}/api/live-conditions/${z}`)
         .then((r) => setLiveCond(r.data))
         .catch(() => setLiveCond(null));
-      // Heat/canopy/vulnerability choropleths — region-scoped (San Antonio);
-      // chips only appear when the searched zip is in the covered set.
+      // Heat/canopy/vulnerability choropleths — built on demand for the
+      // region (~12 mi) around any searched US zip. Can be slow on the first
+      // search in a new region (runtime canopy computation); independent
+      // .catch so failure only hides these layers.
       setZipPopup(null);
+      setHeatLayers(null);
       axios
-        .get(`${API_BASE}/api/heat-layers`)
+        .get(`${API_BASE}/api/heat-layers/${z}`)
         .then((r) => setHeatLayers(r.data))
         .catch(() => setHeatLayers(null));
     } catch (e) {
@@ -548,9 +551,13 @@ Respectfully,
   const displayScore = useCountUp(rc?.score ?? null);
   const comparing = pinned && data && pinned.zip !== data.zip_code;
 
-  // Heat choropleths only exist for the San Antonio region — gate all their
-  // UI on the searched zip being in the covered set.
-  const inHeatRegion = !!(data && heatLayers?.sa_zips?.includes(data.zip_code));
+  // Heat choropleths are built per region around the searched zip — gate the
+  // UI on the response actually covering this zip with drawable polygons.
+  const inHeatRegion = !!(
+    data &&
+    heatLayers?.features?.length > 0 &&
+    heatLayers?.region_zips?.includes(data.zip_code)
+  );
   const activeHeatToggle = HEAT_TOGGLE_KEYS.find((k) => visible[k]) ?? null;
   const activeHeatMetric =
     inHeatRegion && activeHeatToggle ? METRIC_FOR_TOGGLE[activeHeatToggle] : null;
