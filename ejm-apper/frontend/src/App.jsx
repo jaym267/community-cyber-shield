@@ -1214,7 +1214,7 @@ Respectfully,
                           paint={heatFillPaint(activeHeatMetric, heatLayers.stats)}
                         />
                         <Layer id="heat-outline" type="line" paint={heatOutlinePaint} />
-                        {visible.vuln && visible.cooling && farZipList.length > 0 && (
+                        {nearCooling && visible.vuln && visible.cooling && farZipList.length > 0 && (
                           <Layer {...farZipLineLayer(farZipList)} />
                         )}
                       </Source>
@@ -1395,7 +1395,7 @@ Respectfully,
                       </button>
                     )}
                   </div>
-                  {visible.vuln && visible.cooling && farZipList.length > 0 && (
+                  {nearCooling && visible.vuln && visible.cooling && farZipList.length > 0 && (
                     <p className="far-cooling-note">
                       ⚠ Dashed outline = high-vulnerability zip whose center is
                       more than {coolingCenters.threshold_mi} mi from any cooling
