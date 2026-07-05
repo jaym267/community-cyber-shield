@@ -1283,6 +1283,24 @@
 .chip.heat.on .swatch { background: linear-gradient(90deg, #e8d69a, #8a1620); }
 .chip.canopy.on .swatch { background: linear-gradient(90deg, #a8d3b2, #1c5f37); }
 .chip.vuln.on .swatch { background: linear-gradient(90deg, #c9a884, #5c0e16); }
+.chip.cool.on .swatch { background: #133f3d; border-radius: 50%; }
+
+/* Note shown when far-from-cooling outlines are active */
+.far-cooling-note {
+  position: absolute;
+  top: 14px;
+  left: 190px;
+  z-index: 5;
+  max-width: 250px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px dashed #8a1620;
+  border-radius: var(--wobble-sm);
+  padding: 7px 10px;
+  margin: 0;
+}
 
 /* ── Choropleth legend (bottom-right of the map pane) ────────────────────── */
 .heat-legend {

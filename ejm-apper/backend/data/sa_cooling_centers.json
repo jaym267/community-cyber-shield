@@ -1,0 +1,1572 @@
+{
+ "_source_url": "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Cooling_Centers_Viewer/FeatureServer/0 (City of San Antonio GIS, \"Places to Stay Cool\")",
+ "_retrieved": "2026-07-04",
+ "_note": "Static snapshot used only when the live CoSA feed is unreachable; refresh seasonally.",
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4926805698477,
+     29.432360930324
+    ]
+   },
+   "properties": {
+    "name": "Central Library",
+    "address": "600 Soledad St",
+    "type": "Library",
+    "phone": "210.207.2500",
+    "zip": "78205"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5197621400069,
+     29.4271174200734
+    ]
+   },
+   "properties": {
+    "name": "Bazan Branch Library",
+    "address": "2200 W Commerce St",
+    "type": "Library",
+    "phone": "210.207.9160",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4732159596114,
+     29.5696118596334
+    ]
+   },
+   "properties": {
+    "name": "Brook Hollow Branch Library",
+    "address": "530 Heimer Rd",
+    "type": "Library",
+    "phone": "201.207.9030",
+    "zip": "78232"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5151479696012,
+     29.3984055300315
+    ]
+   },
+   "properties": {
+    "name": "Collins Garden Branch Library",
+    "address": "200 N Park Blvd",
+    "type": "Library",
+    "phone": "210.225.0331",
+    "zip": "78204"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5516919500938,
+     29.3335566301727
+    ]
+   },
+   "properties": {
+    "name": "Cortez Branch Library",
+    "address": "2803 Hunter Blvd",
+    "type": "Library",
+    "phone": "210.207.9130",
+    "zip": "78224"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4492778497529,
+     29.6367792396551
+    ]
+   },
+   "properties": {
+    "name": "Encino Branch Library",
+    "address": "2515 E Evans Rd",
+    "type": "Library",
+    "phone": "210.207.9250",
+    "zip": "78259"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.588630980004,
+     29.4641629398559
+    ]
+   },
+   "properties": {
+    "name": "Forest Hills Branch Library",
+    "address": "5245 Ingram Rd",
+    "type": "Library",
+    "phone": "210.207.9230",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.662858629997,
+     29.4833360700303
+    ]
+   },
+   "properties": {
+    "name": "Great Northwest Branch Library",
+    "address": "9050 Wellwood St",
+    "type": "Library",
+    "phone": "210.207.9210",
+    "zip": "78250"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6254891804032,
+     29.4246045500682
+    ]
+   },
+   "properties": {
+    "name": "Guerra Branch Library",
+    "address": "7978 W Military Dr",
+    "type": "Library",
+    "phone": "210.207.9070",
+    "zip": "78227"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6432205398079,
+     29.5696282297609
+    ]
+   },
+   "properties": {
+    "name": "Igo Branch Library",
+    "address": "13330 Kyle Seale Pkwy",
+    "type": "Library",
+    "phone": "210.207.9080",
+    "zip": "78249"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6394775304119,
+     29.3719493703674
+    ]
+   },
+   "properties": {
+    "name": "Johnston Branch Library",
+    "address": "6307 Sun Valley Dt",
+    "type": "Library",
+    "phone": "210.207.9240",
+    "zip": "78227"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4879179995537,
+     29.4632083100738
+    ]
+   },
+   "properties": {
+    "name": "Landa Branch Library",
+    "address": "233 Bushnell Ave",
+    "type": "Library",
+    "phone": "210.207.9090",
+    "zip": "78212"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5496129502857,
+     29.4180710401776
+    ]
+   },
+   "properties": {
+    "name": "Las Palmas Branch Library",
+    "address": "515 Castroville Rd",
+    "type": "Library",
+    "phone": "210.207.9200",
+    "zip": "78237"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6418047697673,
+     29.5246790501985
+    ]
+   },
+   "properties": {
+    "name": "Maverick Branch Library",
+    "address": "8700 Mystic Park",
+    "type": "Library",
+    "phone": "210.207.9060",
+    "zip": "78254"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4579253803259,
+     29.3815599596544
+    ]
+   },
+   "properties": {
+    "name": "Mccreless Branch Library",
+    "address": "1023 Ada St",
+    "type": "Library",
+    "phone": "210.207.9170",
+    "zip": "78223"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.564279169906,
+     29.448355830031
+    ]
+   },
+   "properties": {
+    "name": "Memorial Branch Library",
+    "address": "3222 Culebra Rd",
+    "type": "Library",
+    "phone": "210.207.9140",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4800285096383,
+     29.3650398703383
+    ]
+   },
+   "properties": {
+    "name": "Mission Branch Library",
+    "address": "3134 Roosevelt Ave",
+    "type": "Library",
+    "phone": "210.207.2704",
+    "zip": "78214"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5211834499578,
+     29.3625849603905
+    ]
+   },
+   "properties": {
+    "name": "Pan American Branch Library",
+    "address": "1122 W Pyron Ave",
+    "type": "Library",
+    "phone": "210.207.9150",
+    "zip": "78221"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.514960159723,
+     29.6365674002179
+    ]
+   },
+   "properties": {
+    "name": "Parman Branch Library at Stone Oak",
+    "address": "20735 Wilderness Oak",
+    "type": "Library",
+    "phone": "210.207.2703",
+    "zip": "78258"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4998749200401,
+     29.4464707199904
+    ]
+   },
+   "properties": {
+    "name": "San Pedro Branch Library",
+    "address": "1315 San Pedro Ave",
+    "type": "Library",
+    "phone": "210.207.9050",
+    "zip": "78212"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.3659499802675,
+     29.3931153896113
+    ]
+   },
+   "properties": {
+    "name": "Schaefer Branch Library",
+    "address": "6322 US Hwy 87 E",
+    "type": "Library",
+    "phone": "210.207.9300",
+    "zip": "78222"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.3725253103807,
+     29.5793107802948
+    ]
+   },
+   "properties": {
+    "name": "Semmes Branch Library",
+    "address": "15060 Judson Rd",
+    "type": "Library",
+    "phone": "210.207.9110",
+    "zip": "78247"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4014464999861,
+     29.5449703299245
+    ]
+   },
+   "properties": {
+    "name": "Thousand Oaks Branch Library",
+    "address": "4618 Thousand Oaks Dr",
+    "type": "Library",
+    "phone": "210.207.9190",
+    "zip": "78233"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4337827501283,
+     29.5106247599383
+    ]
+   },
+   "properties": {
+    "name": "Tobin at Oakwell Branch Library",
+    "address": "4134 Harry Wurzbach Rd",
+    "type": "Library",
+    "phone": "210.207.9040",
+    "zip": "78209"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5337614000547,
+     29.485418420185
+    ]
+   },
+   "properties": {
+    "name": "Westfall Branch Library",
+    "address": "6111 Rosedale Ct",
+    "type": "Library",
+    "phone": "210.207.9220",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4558339702921,
+     29.398999930104
+    ]
+   },
+   "properties": {
+    "name": "James Bode Community Center",
+    "address": "901 Rigsby Ave",
+    "type": "Community Center",
+    "phone": "210.207.1770",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4962558700684,
+     29.4183863798026
+    ]
+   },
+   "properties": {
+    "name": "Commanders House Adult and Senior Center",
+    "address": "622 S Flores St",
+    "type": "Community Center",
+    "phone": "210.207.3010",
+    "zip": "78204"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.3938773996066,
+     29.4143142098414
+    ]
+   },
+   "properties": {
+    "name": "Copernicus Community Center",
+    "address": "5003 Lord Rd",
+    "type": "Community Center",
+    "phone": "210.648.1072",
+    "zip": "78220"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5716546501041,
+     29.4256378397411
+    ]
+   },
+   "properties": {
+    "name": "Cuellar Community Center",
+    "address": "5626 San Fernando St",
+    "type": "Community Center",
+    "phone": "210.207.3156",
+    "zip": "78227"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4534639603493,
+     29.4191658497283
+    ]
+   },
+   "properties": {
+    "name": "Dawson Community Center",
+    "address": "2500 E Commerce St",
+    "type": "Community Center",
+    "phone": "210.227.1627",
+    "zip": "78203"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4640990296581,
+     29.4053961997879
+    ]
+   },
+   "properties": {
+    "name": "Denver Heights Community Center",
+    "address": "300 Porter St",
+    "type": "Community Center",
+    "phone": "210.533.5242",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6006976898895,
+     29.4545159598928
+    ]
+   },
+   "properties": {
+    "name": "Garza Community Center",
+    "address": "1450 Mira Vista",
+    "type": "Community Center",
+    "phone": "210.207.3239",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6439408197825,
+     29.4114826996346
+    ]
+   },
+   "properties": {
+    "name": "Gill Community Center",
+    "address": "7902 Westshire Dr",
+    "type": "Community Center",
+    "phone": "210.207.3237",
+    "zip": "78227"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5383817302083,
+     29.4896401796435
+    ]
+   },
+   "properties": {
+    "name": "Granados Adult and Senior Center",
+    "address": "500 Freiling Dr",
+    "type": "Community Center",
+    "phone": "210.207.3285",
+    "zip": "78213"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4245617000437,
+     29.5340564300367
+    ]
+   },
+   "properties": {
+    "name": "Hamilton Community Center",
+    "address": "10700 Nacogdoches Rd",
+    "type": "Community Center",
+    "phone": "210.207.3121",
+    "zip": "78217"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4943666600253,
+     29.3550850097517
+    ]
+   },
+   "properties": {
+    "name": "Harlandale Community Center",
+    "address": "301 Sussex Ave",
+    "type": "Community Center",
+    "phone": "210.207.3090",
+    "zip": "78221"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4730759095636,
+     29.4537834600581
+    ]
+   },
+   "properties": {
+    "name": "Lions Field Adult & Senior Citizens Center",
+    "address": "2809 Broadway St",
+    "type": "Community Center",
+    "phone": "210.207.5380",
+    "zip": "78209"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5773780395614,
+     29.4337385003531
+    ]
+   },
+   "properties": {
+    "name": "Melendrez Community Center",
+    "address": "5909 W Commerce St",
+    "type": "Community Center",
+    "phone": "210.207.3235",
+    "zip": "78237"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6193147001294,
+     29.3445161600969
+    ]
+   },
+   "properties": {
+    "name": "Miller's Pond Community Center",
+    "address": "6075 Old Pearsall Rd",
+    "type": "Community Center",
+    "phone": "210.623.2900",
+    "zip": "78242"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5394942397888,
+     29.3811104698322
+    ]
+   },
+   "properties": {
+    "name": "Normoyle Community Center & Senior Center",
+    "address": "700 Culberson Ave",
+    "type": "Community Center",
+    "phone": "210.207.5652",
+    "zip": "78225"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5250739797915,
+     29.3875359603416
+    ]
+   },
+   "properties": {
+    "name": "Palm Heights Community Center",
+    "address": "1201 W Malone Ave",
+    "type": "Community Center",
+    "phone": "210.207.3099",
+    "zip": "78225"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.531359550225,
+     29.331282820093
+    ]
+   },
+   "properties": {
+    "name": "Ramirez Community Center",
+    "address": "1011 Gillette Blvd",
+    "type": "Community Center",
+    "phone": "210.921.0681",
+    "zip": "78224"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.528090899808,
+     29.4036239903734
+    ]
+   },
+   "properties": {
+    "name": "San Juan Community Center",
+    "address": "2307 S Calaveras St",
+    "type": "Community Center",
+    "phone": "210.225.5410",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5590469001943,
+     29.3698361198643
+    ]
+   },
+   "properties": {
+    "name": "South San Community Center",
+    "address": "2031 Quintana Rd",
+    "type": "Community Center",
+    "phone": "210.927.1640",
+    "zip": "78211"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4375330996585,
+     29.3835650301241
+    ]
+   },
+   "properties": {
+    "name": "Quintero Community Center",
+    "address": "3100 Hiawatha Dr",
+    "type": "Community Center",
+    "phone": "210.207.3155",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5131258897444,
+     29.4304658200496
+    ]
+   },
+   "properties": {
+    "name": "Tobin Community Center",
+    "address": "1900 W Martin St",
+    "type": "Community Center",
+    "phone": "210.225.0941",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5500102302201,
+     29.4733257202644
+    ]
+   },
+   "properties": {
+    "name": "Ward Community Center",
+    "address": "435 E Sunshine Dr",
+    "type": "Community Center",
+    "phone": "210.732.2481",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4481675096039,
+     29.4367718800283
+    ]
+   },
+   "properties": {
+    "name": "Woodard Community Center",
+    "address": "1011 Locke St",
+    "type": "Community Center",
+    "phone": "210.225.5445",
+    "zip": "78208"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6628080503549,
+     29.4050541203804
+    ]
+   },
+   "properties": {
+    "name": "Yates Community Center",
+    "address": "568 Rasa Dr",
+    "type": "Community Center",
+    "phone": "210.207.3095",
+    "zip": "78227"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6481289902159,
+     29.4699533000602
+    ]
+   },
+   "properties": {
+    "name": "Alicia Trevino Lopez Senior Center",
+    "address": "8353 Culebra Rd",
+    "type": "Senior Center",
+    "phone": "210.558.0178",
+    "zip": "78251"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5827218297257,
+     29.504411079955
+    ]
+   },
+   "properties": {
+    "name": "Bob Ross Senior Center",
+    "address": "2219 Babcock Rd",
+    "type": "Senior Center",
+    "phone": "210.207.5300",
+    "zip": "78229"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4454527199669,
+     29.420500379958
+    ]
+   },
+   "properties": {
+    "name": "Claude Black Community Center (District 2)",
+    "address": "2805 E Commerce St",
+    "type": "Senior Center",
+    "phone": "210.207.5233",
+    "zip": "78202"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4062829998314,
+     29.4015141298015
+    ]
+   },
+   "properties": {
+    "name": "District 2 Senior Center",
+    "address": "1751 S WW White Rd",
+    "type": "Senior Center",
+    "phone": "210.207.5390",
+    "zip": "78220"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4820275602845,
+     29.395187139771
+    ]
+   },
+   "properties": {
+    "name": "District 5 Senior Center",
+    "address": "2701 S Presa St",
+    "type": "Senior Center",
+    "phone": "210.207.5270",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6161478297324,
+     29.4721675896263
+    ]
+   },
+   "properties": {
+    "name": "Doris Griffin Senior Center",
+    "address": "6157 NW Loop 410",
+    "type": "Senior Center",
+    "phone": "210.780.7444",
+    "zip": "78238"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5316967696978,
+     29.4426514700737
+    ]
+   },
+   "properties": {
+    "name": "Frank Garrett Multi-Service Center",
+    "address": "1226 NW 18th St",
+    "type": "Senior Center",
+    "phone": "210.207.1700",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4123543795617,
+     29.5551694701206
+    ]
+   },
+   "properties": {
+    "name": "Northeast Senior Center",
+    "address": "4135 Thousand Oaks Dr",
+    "type": "Senior Center",
+    "phone": "210.207.4590",
+    "zip": "78233"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4329655904436,
+     29.388700469724
+    ]
+   },
+   "properties": {
+    "name": "Southside Lions Senior Center",
+    "address": "3303 Pecan Valley Dr",
+    "type": "Senior Center",
+    "phone": "210.207.1760",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5032919299212,
+     29.5550777500231
+    ]
+   },
+   "properties": {
+    "name": "Walker Ranch Senior Center",
+    "address": "835 W Rhapsody Dr",
+    "type": "Senior Center",
+    "phone": "210.207.5280",
+    "zip": "78216"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6130213700485,
+     29.3760755003743
+    ]
+   },
+   "properties": {
+    "name": "Willie M. Cortez Senior Center",
+    "address": "5512 SW Military Dr",
+    "type": "Senior Center",
+    "phone": "210.207.5294",
+    "zip": "78242"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4976478599068,
+     29.3896682097873
+    ]
+   },
+   "properties": {
+    "name": "Concepcion Park Swimming Pool",
+    "address": "600 E Theo Ave",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.532.3473",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5722038998317,
+     29.4249404599142
+    ]
+   },
+   "properties": {
+    "name": "Cuellar Park Swimming Pool",
+    "address": "502 SW 36th St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.434.8028",
+    "zip": "78237"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5399193297677,
+     29.5040628200866
+    ]
+   },
+   "properties": {
+    "name": "Dellview Park Swimming Pool",
+    "address": "500 Basswood Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.434.8028",
+    "zip": "78213"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5375173703436,
+     29.4266890597764
+    ]
+   },
+   "properties": {
+    "name": "Elmendorf Lake Park Swimming Pool",
+    "address": "235 Shore Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.268.8201",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4692361004076,
+     29.422885910272
+    ]
+   },
+   "properties": {
+    "name": "Fairchild Park Swimming Pool",
+    "address": "1214 E Crockett St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.226.6915",
+    "zip": "78202"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5236523401588,
+     29.368789280022
+    ]
+   },
+   "properties": {
+    "name": "Flores Park (Southcross) Swimming Pool",
+    "address": "803 W Southcross Blvd",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.927.2001",
+    "zip": "78211"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6007370702349,
+     29.4558473997224
+    ]
+   },
+   "properties": {
+    "name": "Garza Park Swimming Pool",
+    "address": "5800 Hemphill Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.434.8122",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6787844601222,
+     29.4196585602949
+    ]
+   },
+   "properties": {
+    "name": "Heritage Swimming Pool",
+    "address": "1423 S Ellison Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.645.9465",
+    "zip": "78245"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5539649303078,
+     29.3935936898519
+    ]
+   },
+   "properties": {
+    "name": "Kennedy Park Swimming Pool",
+    "address": "3299 SW 28th St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.436.7009",
+    "zip": "78226"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4954778697436,
+     29.3311335502364
+    ]
+   },
+   "properties": {
+    "name": "Kingsborough Park Swimming Pool",
+    "address": "350 Felps Blvd",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.924.6761",
+    "zip": "78221"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4251601199567,
+     29.5342298000043
+    ]
+   },
+   "properties": {
+    "name": "Lady Bird Johnson Park Swimming Pool",
+    "address": "10700 Nacogdoches Rd",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.599.0122",
+    "zip": "78217"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4462507500276,
+     29.4199869497367
+    ]
+   },
+   "properties": {
+    "name": "Lincoln Park Swimming Pool",
+    "address": "2803 E Commerce St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.224.7590",
+    "zip": "78203"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5751543597885,
+     29.4342941601834
+    ]
+   },
+   "properties": {
+    "name": "Monterrey Park Swimming Pool",
+    "address": "5919 W Commerce St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.434.2727",
+    "zip": "78237"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6720662296068,
+     29.5173332097614
+    ]
+   },
+   "properties": {
+    "name": "New Territories Park Swimming Pool",
+    "address": "9023 Bowen Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.681.2929",
+    "zip": "78250"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5397602300461,
+     29.380378350221
+    ]
+   },
+   "properties": {
+    "name": "Normoyle Park Swimming Pool",
+    "address": "700 Culberson Ave",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.923.2442",
+    "zip": "78225"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4874472302425,
+     29.4008331900126
+    ]
+   },
+   "properties": {
+    "name": "Roosevelt Park Swimming Pool",
+    "address": "331 Roosevelt Ave",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.532.6091",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.513079189926,
+     29.4220237696742
+    ]
+   },
+   "properties": {
+    "name": "San Antonio Natatorium",
+    "address": "1430 W Cesar E Chavez Blvd",
+    "type": "Swimming Pool - Indoor",
+    "phone": "210.207.3299",
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5019191703181,
+     29.4459696002343
+    ]
+   },
+   "properties": {
+    "name": "San Pedro Springs Park Swimming Pool",
+    "address": "2200 N Flores St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.732.5992",
+    "zip": "78204"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.437722699879,
+     29.383846910162
+    ]
+   },
+   "properties": {
+    "name": "Southside Lions Park Swimming Pool",
+    "address": "3100 Hiawatha St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.532.2027",
+    "zip": "78210"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6176691095981,
+     29.5527719102817
+    ]
+   },
+   "properties": {
+    "name": "Springtime Park Swimming Pool",
+    "address": "6571 Spring Time Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.558.0491",
+    "zip": "78249"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5747839601424,
+     29.4814338603309
+    ]
+   },
+   "properties": {
+    "name": "Sunset Hills Park Swimming Pool",
+    "address": "103 Chesswood Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.435.4011",
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5496779101588,
+     29.4734538403281
+    ]
+   },
+   "properties": {
+    "name": "Ward Park Swimming Pool",
+    "address": "435 E Sunshine St",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.732.7350",
+    "zip": "78240"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6302330899939,
+     29.4201353303489
+    ]
+   },
+   "properties": {
+    "name": "Westwood Village Park Swimming Pool",
+    "address": "7627 W Military Dr",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.216.2503",
+    "zip": "78242"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5281111801739,
+     29.4508894898909
+    ]
+   },
+   "properties": {
+    "name": "Woodlawn Lake Park Swimming Pool",
+    "address": "221 Alexander Ave",
+    "type": "Swimming Pool - Outdoor",
+    "phone": "210.732.5789",
+    "zip": "78201"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5369203796502,
+     29.4113775102697
+    ]
+   },
+   "properties": {
+    "name": "Benavides Park Splash Pad",
+    "address": "1502 Saltillo St",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5372409802902,
+     29.4263663403012
+    ]
+   },
+   "properties": {
+    "name": "Elmendorf Lake Park Splash Pad",
+    "address": "235 Shore Dr",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78207"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4874315600307,
+     29.4190188096505
+    ]
+   },
+   "properties": {
+    "name": "Hemisfair Splash Pad",
+    "address": "434 S Alamo St",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78205"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4461671303494,
+     29.4204730303906
+    ]
+   },
+   "properties": {
+    "name": "Lincoln Park Splash Pad",
+    "address": "2915 E Commerce St",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78203"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.4176920396226,
+     29.4149223900179
+    ]
+   },
+   "properties": {
+    "name": "Martin Luther King Park Splash Pad",
+    "address": "3503 Marin Luther King Dr",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78220"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5954083097836,
+     29.359114810002
+    ]
+   },
+   "properties": {
+    "name": "Pearsall Park Splash Pad",
+    "address": "5102 Old Pearsall Rd",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78242"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.5496695504368,
+     29.4730895403127
+    ]
+   },
+   "properties": {
+    "name": "Ward Park Splash Pad",
+    "address": "435 E Sunshine Dr",
+    "type": "Splash Pad",
+    "phone": null,
+    "zip": "78228"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.6809271810267,
+     29.4195843215456
+    ]
+   },
+   "properties": {
+    "name": "Robinette Community Center",
+    "address": "1423 S Ellison Dr",
+    "type": "Community Center",
+    "phone": "210.207.3260",
+    "zip": "78245"
+   }
+  }
+ ]
+}

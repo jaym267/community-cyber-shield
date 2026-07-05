@@ -36,10 +36,12 @@ from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
 from acs_api import generate_mock_acs, get_acs_zcta_data
 from canopy_data import get_canopy_data
+from cooling_centers import get_cooling_centers
 from heat_api import get_heat_data, load_sa_zips
 from heat_vulnerability import WEIGHTS, compute_vulnerability
 from region_layers import (
     REGION_RADIUS_MI,
+    _haversine_mi,
     acs_for_zips,
     canopy_for_region,
     heat_for_zips,
@@ -742,6 +744,82 @@ async def heat_layers_endpoint(request: Request, zip_code: str):
     all_good = bool(features) and heat_src == "live" and acs_src == "live"
     cache_set(cache_key, result,
               ttl=_CACHE_TTL_SECONDS if all_good else _CACHE_TTL_MOCK_SECONDS)
+    return result
+
+
+# ── Cooling-centers route (City of San Antonio program — SA-specific) ─────────
+
+_COOLING_VULN_THRESHOLD = 60   # "high vulnerability" score cutoff
+_COOLING_FAR_MILES = 2.0       # centroid-to-nearest-center distance flag
+
+
+@app.get("/api/cooling-centers")
+@limiter.limit("20/minute")
+async def cooling_centers_endpoint(request: Request):
+    """
+    San Antonio cooling-center locations (live CoSA GIS feed with committed
+    snapshot fallback), plus `far_zips`: high-vulnerability SA zips whose
+    centroid is more than 2 miles from every cooling center. Distances are
+    centroid-based and approximate — labeled as such in the frontend.
+    """
+    cache_key = "cooling:sa"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        logger.info("cache HIT %s", cache_key)
+        return cached
+    logger.info("cache MISS %s", cache_key)
+
+    cooling = await get_cooling_centers()
+    centers = cooling["centers"]["features"]
+
+    # High-vulnerability SA zips far from every center. Vulnerability comes
+    # from the same cached SA pipeline the other endpoints use; if it's
+    # unavailable we flag distance-only over all SA zips and say so.
+    far_zips = []
+    far_basis = "vulnerability"
+    if centers:
+        try:
+            heat = await _heat_cached()
+            canopy = get_canopy_data()
+            acs = await _acs_cached()
+            sa = load_sa_zips()
+            all_zips = [z["zip"] for z in sa]
+            vuln = compute_vulnerability(heat["zips"], canopy["zips"], acs["zips"], all_zips)
+            candidates = [z for z in sa
+                          if (vuln.get(z["zip"]) or {}).get("score") is not None
+                          and vuln[z["zip"]]["score"] >= _COOLING_VULN_THRESHOLD]
+            if not candidates:
+                far_basis = "distance_only"
+                candidates = list(sa)
+        except Exception as e:
+            logger.warning("vulnerability unavailable for far-zips (%r)", e)
+            far_basis = "distance_only"
+            candidates = list(load_sa_zips())
+
+        for z in candidates:
+            best_d, best_name = None, None
+            for c in centers:
+                clon, clat = c["geometry"]["coordinates"][:2]
+                d = _haversine_mi(z["lat"], z["lon"], clat, clon)
+                if best_d is None or d < best_d:
+                    best_d, best_name = d, c["properties"]["name"]
+            if best_d is not None and best_d > _COOLING_FAR_MILES:
+                far_zips.append({
+                    "zip": z["zip"],
+                    "nearest_center": best_name,
+                    "distance_mi": round(best_d, 1),
+                })
+        far_zips.sort(key=lambda f: -f["distance_mi"])
+
+    result = {
+        **cooling,
+        "far_zips": far_zips,
+        "far_basis": far_basis,
+        "threshold_mi": _COOLING_FAR_MILES,
+        "vuln_threshold": _COOLING_VULN_THRESHOLD,
+    }
+    ttl = _CACHE_TTL_SECONDS if cooling["source"] == "live" else _CACHE_TTL_MOCK_SECONDS
+    cache_set(cache_key, result, ttl=ttl)
     return result
 
 

@@ -198,6 +198,40 @@ const heatOutlinePaint = {
 const HEAT_TOGGLE_KEYS = ["heat", "canopy", "vuln"];
 const METRIC_FOR_TOGGLE = { heat: "temp_f", canopy: "canopy_pct", vuln: "vuln_score" };
 
+// Cooling-center markers (City of San Antonio program — SA-area only).
+const coolingLayer = {
+  id: "cooling-circle",
+  type: "circle",
+  paint: {
+    "circle-radius": 6,
+    "circle-color": "#133f3d",
+    "circle-stroke-width": 2,
+    "circle-stroke-color": "#f3efe4",
+    "circle-opacity": 0.95,
+  },
+};
+
+// Dashed alarm outline for high-vulnerability zips > 2 mi from any cooling
+// center (drawn over the vulnerability choropleth when both layers are on).
+const farZipLineLayer = (farZips) => ({
+  id: "far-cooling-line",
+  type: "line",
+  filter: ["in", ["get", "zip"], ["literal", farZips]],
+  paint: {
+    "line-color": "#8a1620",
+    "line-width": 2.2,
+    "line-dasharray": [2, 1.6],
+  },
+});
+
+function haversineMi(lat1, lon1, lat2, lon2) {
+  const r = (d) => (d * Math.PI) / 180;
+  const a =
+    Math.sin(r(lat2 - lat1) / 2) ** 2 +
+    Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lon2 - lon1) / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.sqrt(a));
+}
+
 // Average the three air-pollution percentiles to drive heatmap intensity.
 function airIntensity(percentiles) {
   const vals = [
@@ -343,6 +377,7 @@ export default function App() {
   const [visible, setVisible] = useState({
     air: true, facilities: true, parks: true,
     heat: false, canopy: false, vuln: false,   // choropleths default off
+    cooling: false,                            // SA cooling centers
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -352,8 +387,10 @@ export default function App() {
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [liveCond, setLiveCond] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
-  const [heatLayers, setHeatLayers] = useState(null); // SA-only choropleth data
+  const [heatLayers, setHeatLayers] = useState(null); // regional choropleth data
   const [zipPopup, setZipPopup] = useState(null);     // clicked choropleth zip
+  const [coolingCenters, setCoolingCenters] = useState(null); // SA cooling sites
+  const [coolPopup, setCoolPopup] = useState(null);   // clicked cooling center
   const [facilityPopup, setFacilityPopup] = useState(null);
   const [legalDoc, setLegalDoc] = useState(null);
   // New-feature state
@@ -384,6 +421,7 @@ export default function App() {
     setLiveCond(null);
     setFacilityPopup(null);
     setZipPopup(null);
+    setCoolPopup(null);
     setPinned(null);
     setOpenInd(null);
     setMapCenter(null);
@@ -445,6 +483,13 @@ export default function App() {
         .get(`${API_BASE}/api/heat-layers/${z}`)
         .then((r) => setHeatLayers(r.data))
         .catch(() => setHeatLayers(null));
+      // Cooling centers (City of San Antonio program) — the chip only shows
+      // when the searched location is actually near the centers.
+      setCoolPopup(null);
+      axios
+        .get(`${API_BASE}/api/cooling-centers`)
+        .then((r) => setCoolingCenters(r.data))
+        .catch(() => setCoolingCenters(null));
     } catch (e) {
       setError(
         e.response?.data?.detail ||
@@ -562,6 +607,20 @@ Respectfully,
   const activeHeatMetric =
     inHeatRegion && activeHeatToggle ? METRIC_FOR_TOGGLE[activeHeatToggle] : null;
 
+  // Cooling centers are a City of San Antonio program: show that UI only
+  // when the searched location is within ~30 mi of at least one center.
+  const coolFeatures = coolingCenters?.centers?.features ?? [];
+  const nearCooling = !!(
+    data?.location &&
+    coolFeatures.some((f) =>
+      haversineMi(
+        data.location.lat, data.location.lon,
+        f.geometry.coordinates[1], f.geometry.coordinates[0],
+      ) < 30
+    )
+  );
+  const farZipList = (coolingCenters?.far_zips ?? []).map((f) => f.zip);
+
   // Children's Health Index: computed ONLY when all three inputs exist — a
   // missing percentile must show as "no data", never silently default to 50
   // and masquerade as a real score.
@@ -608,7 +667,8 @@ Respectfully,
         (EPA discontinued EJScreen in 2025). Live air quality &amp; weather by{" "}
         <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a>.
         Hazard alerts: National Weather Service. Seismic data: USGS. Heat layer: NASA POWER.
-        Tree canopy: NLCD 2021 (USFS/MRLC). Demographics: US Census Bureau ACS. Maps &amp; place data:{" "}
+        Tree canopy: NLCD 2021 (USFS/MRLC). Demographics: US Census Bureau ACS.
+        Cooling centers: City of San Antonio. Maps &amp; place data:{" "}
         <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
         Geocoding by OpenStreetMap Nominatim.
@@ -1114,11 +1174,14 @@ Respectfully,
                     interactiveLayerIds={[
                       ...(layers ? ["facilities-circle"] : []),
                       ...(heatLayers && activeHeatMetric ? ["heat-fill"] : []),
+                      ...(nearCooling && visible.cooling ? ["cooling-circle"] : []),
                     ]}
                     onClick={(e) => {
                       const feature = e.features?.[0];
+                      setFacilityPopup(null);
+                      setZipPopup(null);
+                      setCoolPopup(null);
                       if (feature?.layer?.id === "facilities-circle") {
-                        setZipPopup(null);
                         setFacilityPopup({
                           lon: feature.geometry.coordinates[0],
                           lat: feature.geometry.coordinates[1],
@@ -1126,19 +1189,21 @@ Respectfully,
                           type: feature.properties.type,
                           source: feature.properties.source,
                         });
+                      } else if (feature?.layer?.id === "cooling-circle") {
+                        setCoolPopup({
+                          lon: feature.geometry.coordinates[0],
+                          lat: feature.geometry.coordinates[1],
+                          ...feature.properties,
+                        });
                       } else if (feature?.layer?.id === "heat-fill") {
-                        setFacilityPopup(null);
                         setZipPopup({
                           lon: e.lngLat.lng,
                           lat: e.lngLat.lat,
                           ...feature.properties,
                         });
-                      } else {
-                        setFacilityPopup(null);
-                        setZipPopup(null);
                       }
                     }}
-                    cursor={facilityPopup || zipPopup ? "pointer" : ""}
+                    cursor={facilityPopup || zipPopup || coolPopup ? "pointer" : ""}
                   >
                     {/* Choropleth first so it renders under markers/circles */}
                     {heatLayers && activeHeatMetric && (
@@ -1149,6 +1214,14 @@ Respectfully,
                           paint={heatFillPaint(activeHeatMetric, heatLayers.stats)}
                         />
                         <Layer id="heat-outline" type="line" paint={heatOutlinePaint} />
+                        {visible.vuln && visible.cooling && farZipList.length > 0 && (
+                          <Layer {...farZipLineLayer(farZipList)} />
+                        )}
+                      </Source>
+                    )}
+                    {nearCooling && visible.cooling && coolFeatures.length > 0 && (
+                      <Source id="cooling" type="geojson" data={coolingCenters.centers}>
+                        <Layer {...coolingLayer} />
                       </Source>
                     )}
                     {layers && visible.parks && (
@@ -1232,6 +1305,29 @@ Respectfully,
                         </div>
                       </Popup>
                     )}
+                    {coolPopup && (
+                      <Popup
+                        longitude={coolPopup.lon}
+                        latitude={coolPopup.lat}
+                        onClose={() => setCoolPopup(null)}
+                        closeOnClick={false}
+                        anchor="bottom"
+                      >
+                        <div className="facility-popup">
+                          <strong className="facility-popup-name">❄ {coolPopup.name}</strong>
+                          <span className="facility-popup-status">{coolPopup.type}</span>
+                          {coolPopup.address && (
+                            <span className="zip-popup-row">{coolPopup.address}</span>
+                          )}
+                          {coolPopup.phone && (
+                            <span className="zip-popup-row">{coolPopup.phone}</span>
+                          )}
+                          <span className="facility-popup-note">
+                            Free public cooling site (City of San Antonio).
+                          </span>
+                        </div>
+                      </Popup>
+                    )}
                   </Map>
 
                   {/* Overlays */}
@@ -1288,7 +1384,24 @@ Respectfully,
                         </button>
                       </>
                     )}
+                    {nearCooling && (
+                      <button
+                        className={`chip cool ${visible.cooling ? "on" : ""}`}
+                        onClick={() => toggle("cooling")}
+                        title="Free public cooling sites (City of San Antonio). Turn on with Heat vulnerability to outline high-risk zips far from any center."
+                      >
+                        <span className="swatch" /> Cooling centers
+                        {coolFeatures.length > 0 && ` (${coolFeatures.length})`}
+                      </button>
+                    )}
                   </div>
+                  {visible.vuln && visible.cooling && farZipList.length > 0 && (
+                    <p className="far-cooling-note">
+                      ⚠ Dashed outline = high-vulnerability zip whose center is
+                      more than {coolingCenters.threshold_mi} mi from any cooling
+                      center (approximate, centroid-based).
+                    </p>
+                  )}
                   {activeHeatMetric && heatLayers && (
                     <HeatLegend
                       metric={activeHeatMetric}
