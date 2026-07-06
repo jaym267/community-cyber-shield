@@ -391,6 +391,7 @@ export default function App() {
   const [zipPopup, setZipPopup] = useState(null);     // clicked choropleth zip
   const [coolingCenters, setCoolingCenters] = useState(null); // SA cooling sites
   const [coolPopup, setCoolPopup] = useState(null);   // clicked cooling center
+  const [assistance, setAssistance] = useState(null); // FEMA history + help directory
   const [facilityPopup, setFacilityPopup] = useState(null);
   const [legalDoc, setLegalDoc] = useState(null);
   // New-feature state
@@ -422,6 +423,7 @@ export default function App() {
     setFacilityPopup(null);
     setZipPopup(null);
     setCoolPopup(null);
+    setAssistance(null);
     setPinned(null);
     setOpenInd(null);
     setMapCenter(null);
@@ -490,6 +492,12 @@ export default function App() {
         .get(`${API_BASE}/api/cooling-centers`)
         .then((r) => setCoolingCenters(r.data))
         .catch(() => setCoolingCenters(null));
+      // County hazard history (FEMA declarations) + assistance directory.
+      setAssistance(null);
+      axios
+        .get(`${API_BASE}/api/assistance/${z}`)
+        .then((r) => setAssistance(r.data))
+        .catch(() => setAssistance(null));
     } catch (e) {
       setError(
         e.response?.data?.detail ||
@@ -668,7 +676,8 @@ Respectfully,
         <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a>.
         Hazard alerts: National Weather Service. Seismic data: USGS. Heat layer: NASA POWER.
         Tree canopy: NLCD 2021 (USFS/MRLC). Demographics: US Census Bureau ACS.
-        Cooling centers: City of San Antonio. Maps &amp; place data:{" "}
+        Cooling centers: City of San Antonio. Disaster history: FEMA OpenFEMA.
+        County lookup: FCC Area API. Maps &amp; place data:{" "}
         <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">© Mapbox</a>,{" "}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>.
         Geocoding by OpenStreetMap Nominatim.
@@ -1098,12 +1107,84 @@ Respectfully,
                       >
                         ☖ Find your elected officials
                       </a>
+                      <button type="button" className="tool-btn" onClick={() => window.print()}>
+                        ⎙ Print this report
+                      </button>
                     </div>
                     <p className="action-note">
                       The letter is pre-filled with this report's actual numbers — paste it
-                      into an email, add your name, and send.
+                      into an email, add your name, and send. Print gives you a clean copy
+                      to bring to a council or neighborhood meeting.
                     </p>
                   </div>
+
+                  {/* Hazard history + assistance directory */}
+                  {assistance && (
+                    <div className="section assist-section">
+                      <h3>
+                        Hazard history &amp; getting help
+                        {assistance.county?.county_name && (
+                          <span className="assist-county"> — {assistance.county.county_name}</span>
+                        )}
+                      </h3>
+
+                      {assistance.disasters === null ? (
+                        <p className="map-note">
+                          Federal disaster records are unavailable right now.
+                        </p>
+                      ) : assistance.disasters.length === 0 ? (
+                        <p className="assist-none">
+                          ✓ No federal disaster declarations on record for this county.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="section-hint">
+                            Federally declared disasters for this county (FEMA record) —
+                            useful evidence when asking for local preparedness investment.
+                          </p>
+                          <div className="disaster-list">
+                            {assistance.disasters.map((d) => (
+                              <div className="disaster-row" key={d.fema_id}>
+                                <span className="disaster-date">{d.declared}</span>
+                                <span className="disaster-title">
+                                  {d.title} <em>({d.type})</em>
+                                </span>
+                                <span className="disaster-badges">
+                                  {d.recent && <span className="dbadge recent">recent</span>}
+                                  {d.individual_assistance && (
+                                    <span className="dbadge ia" title="FEMA opened aid applications for residents for this disaster">
+                                      resident aid was available
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      <h4 className="assist-subhead">Where to get help</h4>
+                      <div className="resource-grid">
+                        {assistance.resources.map((r) => (
+                          <a
+                            className="resource-card"
+                            key={r.name}
+                            href={r.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <span className="resource-name">{r.name}</span>
+                            <span className="resource-desc">{r.desc}</span>
+                            {r.contact && <span className="resource-contact">{r.contact}</span>}
+                          </a>
+                        ))}
+                      </div>
+                      <p className="action-note">
+                        Official programs only — every link goes to a government or
+                        established nonprofit site. Disaster history: FEMA OpenFEMA.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Nearby zip comparison */}
                   <div className="section">

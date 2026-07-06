@@ -35,6 +35,7 @@ from census_api import zip_to_latlon, latlon_to_zip
 from ejscreen_api import get_ejscreen_data
 from map_layers import air_quality_geojson, facilities_geojson, green_space_geojson
 from acs_api import generate_mock_acs, get_acs_zcta_data
+from assistance_api import get_assistance
 from canopy_data import get_canopy_data
 from cooling_centers import get_cooling_centers
 from heat_api import get_heat_data, load_sa_zips
@@ -744,6 +745,38 @@ async def heat_layers_endpoint(request: Request, zip_code: str):
     all_good = bool(features) and heat_src == "live" and acs_src == "live"
     cache_set(cache_key, result,
               ttl=_CACHE_TTL_SECONDS if all_good else _CACHE_TTL_MOCK_SECONDS)
+    return result
+
+
+# ── Assistance route (hazard history + how to get help, any US zip) ───────────
+# FEMA disaster declarations for the zip's county + a curated directory of
+# assistance programs (211, LIHEAP, weatherization...). Built for civic use:
+# "what has happened here, and where do residents actually get help."
+
+@app.get("/api/assistance/{zip_code}")
+@limiter.limit("20/minute")
+async def assistance_endpoint(request: Request, zip_code: str):
+    """County hazard history (FEMA declarations) + assistance directory."""
+    require_zip(zip_code)
+
+    center = load_us_centroids().get(zip_code)
+    if center is None:
+        lat, lon = await resolve_zip(zip_code)
+    else:
+        lat, lon = center
+
+    # Cache by quantized location — everyone in a county shares one entry.
+    cache_key = f"assist:{region_key(lat, lon)}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        logger.info("cache HIT %s", cache_key)
+        return cached
+    logger.info("cache MISS %s", cache_key)
+
+    result = await get_assistance(lat, lon)
+    all_live = result["sources"]["disasters"] == "live"
+    # Declarations change rarely; 6h when live, short retry window otherwise.
+    cache_set(cache_key, result, ttl=(6 * 3600 if all_live else _CACHE_TTL_MOCK_SECONDS))
     return result
 
 

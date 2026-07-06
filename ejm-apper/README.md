@@ -43,6 +43,7 @@ EJMapper is an AI-powered web app that shows you the environmental health of any
 | NLCD / MRLC     | Tree canopy layer (`/api/canopy`): mean NLCD Tree Canopy Cover 2021 per SA zip, computed offline via MRLC's public WCS and committed as a static dataset. Static estimates, 2021 vintage. | No |
 | Census ACS 5-yr | Heat-vulnerability demographics (`/api/heat-vulnerability`): % population 65+, median household income, median housing year built, per ZCTA (2023 vintage). | Yes (free, instant: api.census.gov/data/key_signup.html — set `CENSUS_API_KEY`; without it this component serves labeled mock data) |
 | City of San Antonio GIS | Cooling centers (`/api/cooling-centers`): live "Places to Stay Cool" feed with a committed snapshot fallback; also flags high-vulnerability SA zips > 2 mi from any center. | No |
+| FEMA OpenFEMA + FCC Area API | Assistance panel (`/api/assistance/{zip}`): federally declared disasters for the zip's county (with resident-aid flags) plus a curated directory of help programs (211, DisasterAssistance.gov, LIHEAP, weatherization; TX extras). | No |
 
 ### Heat vulnerability score
 
