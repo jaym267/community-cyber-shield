@@ -91,11 +91,16 @@ async def fema_declarations(client: httpx.AsyncClient, county_fips: str) -> list
 
 def assistance_resources(state_code: str | None) -> list[dict]:
     """Curated help directory — national programs plus state extras."""
+    # Every entry carries desc (EN) and desc_es (ES) — the frontend picks by
+    # the user's language toggle. Program names stay official/untranslated.
     resources = [
         {
             "name": "211 Helpline",
             "desc": "Free 24/7 referrals for utility bills, cooling/heating help, "
                     "food, and housing — the fastest way to find local aid.",
+            "desc_es": "Referencias gratuitas 24/7 para facturas de servicios, ayuda "
+                       "de enfriamiento/calefacción, comida y vivienda — la forma más "
+                       "rápida de encontrar ayuda local.",
             "contact": "Dial 211",
             "url": "https://www.211.org",
         },
@@ -103,6 +108,8 @@ def assistance_resources(state_code: str | None) -> list[dict]:
             "name": "FEMA Disaster Assistance",
             "desc": "Apply for federal help (housing, repairs, expenses) after a "
                     "presidentially declared disaster in your county.",
+            "desc_es": "Solicite ayuda federal (vivienda, reparaciones, gastos) después "
+                       "de un desastre declarado presidencialmente en su condado.",
             "contact": "1-800-621-3362",
             "url": "https://www.disasterassistance.gov",
         },
@@ -110,6 +117,9 @@ def assistance_resources(state_code: str | None) -> list[dict]:
             "name": "LIHEAP — Energy Bill Help",
             "desc": "Federal program that helps low-income households pay "
                     "cooling and heating bills. Apply through your state office.",
+            "desc_es": "Programa federal que ayuda a hogares de bajos ingresos a pagar "
+                       "facturas de aire acondicionado y calefacción. Solicite a través "
+                       "de su oficina estatal.",
             "contact": None,
             "url": "https://www.acf.hhs.gov/ocs/map/liheap-map-state-and-territory-contact-listing",
         },
@@ -118,6 +128,10 @@ def assistance_resources(state_code: str | None) -> list[dict]:
             "desc": "Free home weatherization (insulation, sealing, efficiency "
                     "repairs) for income-eligible households — lowers heat risk "
                     "and energy bills permanently.",
+            "desc_es": "Climatización gratuita del hogar (aislamiento, sellado, "
+                       "reparaciones de eficiencia) para hogares elegibles por ingresos "
+                       "— reduce el riesgo de calor y las facturas de energía "
+                       "permanentemente.",
             "contact": None,
             "url": "https://www.energy.gov/scep/wap/weatherization-assistance-program",
         },
@@ -125,6 +139,8 @@ def assistance_resources(state_code: str | None) -> list[dict]:
             "name": "findhelp.org",
             "desc": "Search thousands of local free/reduced-cost programs by zip "
                     "code — health, housing, transit, legal aid.",
+            "desc_es": "Busque miles de programas locales gratuitos o de bajo costo por "
+                       "código postal — salud, vivienda, transporte, ayuda legal.",
             "contact": None,
             "url": "https://www.findhelp.org",
         },
@@ -135,6 +151,9 @@ def assistance_resources(state_code: str | None) -> list[dict]:
                 "name": "2-1-1 Texas",
                 "desc": "Texas-specific helpline and program search, including "
                         "utility assistance and summer cooling programs.",
+                "desc_es": "Línea de ayuda y búsqueda de programas de Texas, incluyendo "
+                           "asistencia con servicios públicos y programas de "
+                           "enfriamiento de verano.",
                 "contact": "Dial 211",
                 "url": "https://www.211texas.org",
             },
@@ -142,6 +161,8 @@ def assistance_resources(state_code: str | None) -> list[dict]:
                 "name": "Help for Texans (TDHCA)",
                 "desc": "State directory for rent, utility, and home-repair "
                         "assistance providers near you.",
+                "desc_es": "Directorio estatal de proveedores de asistencia para renta, "
+                           "servicios públicos y reparaciones del hogar cerca de usted.",
                 "contact": None,
                 "url": "https://www.tdhca.texas.gov/help-for-texans",
             },

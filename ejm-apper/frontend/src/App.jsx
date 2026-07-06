@@ -4,6 +4,18 @@ import Map, { Marker, Source, Layer, Popup } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./App.css";
 import HeatLegend from "./HeatLegend.jsx";
+import { makeT } from "./i18n.js";
+
+// Language preference persists across visits (San Antonio is ~64% Hispanic;
+// the report content and assistance directory both support Spanish).
+const loadLang = () => {
+  try {
+    const v = localStorage.getItem("sentinal_lang");
+    return v === "es" ? "es" : "en";
+  } catch {
+    return "en";
+  }
+};
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // API base: set VITE_API_BASE to the deployed backend URL in production;
@@ -400,8 +412,19 @@ export default function App() {
   const [pinned, setPinned] = useState(null);       // {zip, score, grade, percentiles}
   const [openInd, setOpenInd] = useState(null);     // env key of the expanded indicator
   const [mapCenter, setMapCenter] = useState(null); // survives loads so the map persists
+  const [lang, setLang] = useState(loadLang);       // "en" | "es"
 
   const mapRef = useRef(null);
+  const t = makeT(lang);
+
+  // Toggle language, persist it, and re-fetch the (language-specific) report.
+  const toggleLang = () => {
+    const next = lang === "en" ? "es" : "en";
+    setLang(next);
+    try { localStorage.setItem("sentinal_lang", next); } catch { /* ignore */ }
+    document.documentElement.lang = next;
+    if (data?.zip_code) search(data.zip_code, { pushUrl: false, langOverride: next });
+  };
 
   const toggle = (key) =>
     setVisible((v) => {
@@ -430,13 +453,14 @@ export default function App() {
     window.history.pushState({}, "", "/");
   };
 
-  const search = async (zipArg, { pushUrl = true, profileOverride } = {}) => {
+  const search = async (zipArg, { pushUrl = true, profileOverride, langOverride } = {}) => {
     const z = (zipArg ?? zip).toString();
     if (!z || z.length !== 5) {
-      setError("Please enter a 5-digit zip code.");
+      setError(t("invalidZip"));
       return;
     }
     const activeProfile = profileOverride ?? profile;
+    const activeLang = langOverride ?? lang;
     setZip(z);
     setLoading(true);
     setError(null);
@@ -453,7 +477,7 @@ export default function App() {
     }
     try {
       const res = await axios.get(`${API_BASE}/api/neighborhood/${z}`, {
-        params: { profile: activeProfile },
+        params: { profile: activeProfile, lang: activeLang },
       });
       setData(res.data);
       setMapCenter({ lat: res.data.location.lat, lon: res.data.location.lon });
@@ -656,13 +680,13 @@ Respectfully,
         value={zip}
         onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
         onKeyDown={onKey}
-        placeholder="Enter a 5-digit zip code"
+        placeholder={t("searchPlaceholder")}
         aria-label="Zip code"
         inputMode="numeric"
         maxLength={5}
       />
       <button onClick={() => search()} disabled={loading}>
-        {loading ? "Loading…" : "Search"}
+        {loading ? "…" : t("searchBtn")}
       </button>
     </div>
   );
@@ -701,20 +725,19 @@ Respectfully,
       {!hasSearched && (
         <div className="landing-hero">
           <ContourBackground />
+          <button type="button" className="lang-toggle lang-toggle-float" onClick={toggleLang}>
+            {t("languageBtn")}
+          </button>
           <div className="hero-inner">
             <h1 className="wordmark">Sentinal</h1>
-            <p className="tagline">Environmental justice by zip code</p>
-            <p className="hero-lead">
-              Every neighborhood has an environmental story. Enter a zip code to
-              see air quality, pollution burden, industrial sites, and green
-              space — turned into a plain-language report card.
-            </p>
+            <p className="tagline">{t("tagline")}</p>
+            <p className="hero-lead">{t("heroLead")}</p>
 
             {searchBox(true)}
             {error && <div className="banner error hero-error">{error}</div>}
 
             <div className="zip-chips">
-              <span className="zip-chips-label">Try</span>
+              <span className="zip-chips-label">{t("try")}</span>
               {SAMPLE_ZIPS.map((s) => (
                 <button key={s.zip} className="zip-chip" onClick={() => search(s.zip)}>
                   <b>{s.zip}</b> {s.place}
@@ -723,7 +746,7 @@ Respectfully,
             </div>
             {recents.length > 0 && (
               <div className="zip-chips recents">
-                <span className="zip-chips-label">Recent</span>
+                <span className="zip-chips-label">{t("recent")}</span>
                 {recents.map((r) => (
                   <button key={r} className="zip-chip" onClick={() => search(r)}>
                     <b>{r}</b>
@@ -735,15 +758,15 @@ Respectfully,
             <div className="landing-facts">
               <div className="landing-fact">
                 <span className="fact-num">13</span>
-                <span className="fact-label">Environmental indicators tracked</span>
+                <span className="fact-label">{t("fact1")}</span>
               </div>
               <div className="landing-fact">
                 <span className="fact-num">A–F</span>
-                <span className="fact-label">Plain-language grade for every zip</span>
+                <span className="fact-label">{t("fact2")}</span>
               </div>
               <div className="landing-fact">
                 <span className="fact-num">LIVE</span>
-                <span className="fact-label">Real-time air quality &amp; official hazard alerts</span>
+                <span className="fact-label">{t("fact3")}</span>
               </div>
             </div>
 
@@ -780,6 +803,9 @@ Respectfully,
                 </button>
               ))}
             </div>
+            <button type="button" className="lang-toggle" onClick={toggleLang}>
+              {t("languageBtn")}
+            </button>
           </header>
 
           <div className="atlas">
@@ -834,24 +860,27 @@ Respectfully,
                   >
                     <div className="score-dial">
                       <span className="num">{displayScore ?? "—"}</span>
-                      <span className="out-of">out of 100</span>
+                      <span className="out-of">{t("outOf100")}</span>
                     </div>
                     <div className="score-body">
                       <div className="zip-line">
-                        <h2>Zip code {data.zip_code}</h2>
-                        {rc?.grade && <span className="grade-pill">Grade {rc.grade}</span>}
+                        <h2>{t("zipCode")} {data.zip_code}</h2>
+                        {rc?.grade && <span className="grade-pill">{t("gradeLabel")} {rc.grade}</span>}
                       </div>
                       <p className="summary">{rc?.summary}</p>
+                      {lang === "es" && (
+                        <p className="translated-note">{t("translatedNote")}</p>
+                      )}
                       <div className="score-actions">
                         <button type="button" className="mini-btn" onClick={share}>
-                          {shareMsg ?? "Share this report"}
+                          {shareMsg ?? t("shareReport")}
                         </button>
                         <button
                           type="button"
                           className={`mini-btn ${pinned?.zip === data.zip_code ? "on" : ""}`}
                           onClick={togglePin}
                         >
-                          {pinned?.zip === data.zip_code ? "Unpin comparison" : "Pin to compare"}
+                          {pinned?.zip === data.zip_code ? t("unpinCompare") : t("pinCompare")}
                         </button>
                       </div>
                     </div>
@@ -872,8 +901,8 @@ Respectfully,
                     <div className="live-panel">
                       <div className="live-head">
                         <span className="live-dot" aria-hidden="true" />
-                        <span className="live-title">Right now in {data.zip_code}</span>
-                        <span className="live-sub">live measured conditions</span>
+                        <span className="live-title">{t("rightNowIn")} {data.zip_code}</span>
+                        <span className="live-sub">{t("liveConditions")}</span>
                       </div>
 
                       {liveCond.alerts?.length > 0 && (
@@ -899,7 +928,7 @@ Respectfully,
                               <div className="live-aqi-top">
                                 <span className="live-num">{Math.round(liveCond.air.us_aqi)}</span>
                                 <div className="live-aqi-meta">
-                                  <span className="live-cell-label">Air quality index</span>
+                                  <span className="live-cell-label">{t("aqiLabel")}</span>
                                   <span className="live-aqi-cat">{band.label}</span>
                                 </div>
                               </div>
@@ -914,7 +943,7 @@ Respectfully,
                         })()}
                         {liveCond.weather?.days?.length > 0 && (
                           <div className="live-cell">
-                            <span className="live-cell-label">3-day outlook (NWS)</span>
+                            <span className="live-cell-label">{t("outlook")}</span>
                             <div className="live-days">
                               {liveCond.weather.days.map((d) => (
                                 <div className="live-day" key={d.date}>
@@ -937,7 +966,7 @@ Respectfully,
 
                       {liveCond.alerts && liveCond.alerts.length === 0 && (
                         <p className="live-noalerts">
-                          ✓ No active weather hazard alerts for this area right now.
+                          {t("noAlerts")}
                         </p>
                       )}
                       {liveCond.quakes?.count_30d > 0 && liveCond.quakes.strongest && (
@@ -955,7 +984,7 @@ Respectfully,
 
                   {/* Grade key — gradient scale with the current grade marked */}
                   <div className="grade-key">
-                    <span className="grade-key-title">What the grade means</span>
+                    <span className="grade-key-title">{t("whatGradeMeans")}</span>
                     <div className="grade-scale">
                       <div className="grade-scale-track" style={{ background: gradeGradient }}>
                         {gradeIndex >= 0 && (
@@ -1076,7 +1105,7 @@ Respectfully,
                   {/* Action items */}
                   {rc?.action_items?.length > 0 && (
                     <div className="section">
-                      <h3>What you can do</h3>
+                      <h3>{t("whatYouCanDo")}</h3>
                       {rc.action_items.map((a, i) => (
                         <div className="list-item action" key={i}>{a}</div>
                       ))}
@@ -1085,11 +1114,11 @@ Respectfully,
 
                   {/* Take-action toolkit — turn the report into pressure */}
                   <div className="section">
-                    <h3>Take action</h3>
-                    <p className="section-hint">Turn this report into something officials have to answer.</p>
+                    <h3>{t("takeAction")}</h3>
+                    <p className="section-hint">{t("takeActionHint")}</p>
                     <div className="action-tools">
                       <button type="button" className="tool-btn primary" onClick={copyLetter}>
-                        ✉ {actionMsg ?? "Copy a letter to your officials"}
+                        ✉ {actionMsg ?? t("copyLetter")}
                       </button>
                       <a
                         className="tool-btn"
@@ -1097,7 +1126,7 @@ Respectfully,
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        ⚑ Report a violation to EPA
+                        ⚑ {t("reportViolation")}
                       </a>
                       <a
                         className="tool-btn"
@@ -1105,43 +1134,32 @@ Respectfully,
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        ☖ Find your elected officials
+                        ☖ {t("findOfficials")}
                       </a>
                       <button type="button" className="tool-btn" onClick={() => window.print()}>
-                        ⎙ Print this report
+                        ⎙ {t("printReport")}
                       </button>
                     </div>
-                    <p className="action-note">
-                      The letter is pre-filled with this report's actual numbers — paste it
-                      into an email, add your name, and send. Print gives you a clean copy
-                      to bring to a council or neighborhood meeting.
-                    </p>
+                    <p className="action-note">{t("actionNote")}</p>
                   </div>
 
                   {/* Hazard history + assistance directory */}
                   {assistance && (
                     <div className="section assist-section">
                       <h3>
-                        Hazard history &amp; getting help
+                        {t("hazardHelp")}
                         {assistance.county?.county_name && (
                           <span className="assist-county"> — {assistance.county.county_name}</span>
                         )}
                       </h3>
 
                       {assistance.disasters === null ? (
-                        <p className="map-note">
-                          Federal disaster records are unavailable right now.
-                        </p>
+                        <p className="map-note">{t("disastersUnavailable")}</p>
                       ) : assistance.disasters.length === 0 ? (
-                        <p className="assist-none">
-                          ✓ No federal disaster declarations on record for this county.
-                        </p>
+                        <p className="assist-none">{t("noDisasters")}</p>
                       ) : (
                         <>
-                          <p className="section-hint">
-                            Federally declared disasters for this county (FEMA record) —
-                            useful evidence when asking for local preparedness investment.
-                          </p>
+                          <p className="section-hint">{t("disasterHint")}</p>
                           <div className="disaster-list">
                             {assistance.disasters.map((d) => (
                               <div className="disaster-row" key={d.fema_id}>
@@ -1150,10 +1168,10 @@ Respectfully,
                                   {d.title} <em>({d.type})</em>
                                 </span>
                                 <span className="disaster-badges">
-                                  {d.recent && <span className="dbadge recent">recent</span>}
+                                  {d.recent && <span className="dbadge recent">{t("recentBadge")}</span>}
                                   {d.individual_assistance && (
                                     <span className="dbadge ia" title="FEMA opened aid applications for residents for this disaster">
-                                      resident aid was available
+                                      {t("residentAid")}
                                     </span>
                                   )}
                                 </span>
@@ -1163,7 +1181,7 @@ Respectfully,
                         </>
                       )}
 
-                      <h4 className="assist-subhead">Where to get help</h4>
+                      <h4 className="assist-subhead">{t("whereToGetHelp")}</h4>
                       <div className="resource-grid">
                         {assistance.resources.map((r) => (
                           <a
@@ -1174,15 +1192,14 @@ Respectfully,
                             rel="noopener noreferrer"
                           >
                             <span className="resource-name">{r.name}</span>
-                            <span className="resource-desc">{r.desc}</span>
+                            <span className="resource-desc">
+                              {lang === "es" && r.desc_es ? r.desc_es : r.desc}
+                            </span>
                             {r.contact && <span className="resource-contact">{r.contact}</span>}
                           </a>
                         ))}
                       </div>
-                      <p className="action-note">
-                        Official programs only — every link goes to a government or
-                        established nonprofit site. Disaster history: FEMA OpenFEMA.
-                      </p>
+                      <p className="action-note">{t("officialOnly")}</p>
                     </div>
                   )}
 

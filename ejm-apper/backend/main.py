@@ -323,6 +323,7 @@ async def neighborhood(
     zip_code: str,
     radius: float = Query(1.0, ge=0.1, le=5.0),
     profile: str = Query("general"),
+    lang: str = Query("en"),
 ):
     """
     Given a 5-digit US zip code, return:
@@ -337,7 +338,9 @@ async def neighborhood(
     # fetch, AND the paid Claude call — so repeat searches are free.
     if profile not in _PROFILE_CONTEXT:
         profile = "general"
-    cache_key = f"neighborhood:{zip_code}:{radius}:{profile}"
+    if lang not in ("en", "es"):
+        lang = "en"
+    cache_key = f"neighborhood:{zip_code}:{radius}:{profile}:{lang}"
     cached = cache_get(cache_key)
     if cached is not None:
         logger.info("cache HIT %s", cache_key)
@@ -382,6 +385,7 @@ async def neighborhood(
         profile=profile,
         score=score,
         grade=grade,
+        lang=lang,
     )
     # Belt-and-suspenders: force the authoritative values even if Claude's JSON
     # somehow included its own score/grade fields, so a model slip-up can never
@@ -980,6 +984,7 @@ async def generate_report_card(
     score: int,
     grade: str,
     profile: str = "general",
+    lang: str = "en",
 ) -> dict:
     """
     Send neighborhood data to Claude and get back the narrative portion of the
@@ -1010,9 +1015,19 @@ async def generate_report_card(
 
     ctx = _PROFILE_CONTEXT.get(profile, _PROFILE_CONTEXT["general"])
 
+    lang_rule = (
+        "Write ALL text values (summary, key_findings, action_items, comparison) "
+        "in natural, plain SPANISH (español) as spoken in Texas — not a literal "
+        "translation register. JSON keys stay in English."
+        if lang == "es" else
+        "Write all text values in English."
+    )
+
     prompt = f"""You are an environmental health analyst writing a neighborhood report card for residents of zip code {zip_code}.
 
 You are writing for {ctx["audience"]}. {ctx["emphasis"]}
+
+{lang_rule}
 
 This neighborhood has ALREADY been scored: {score} out of 100 (higher = more environmentally burdened) and assigned grade {grade} (A = clean, F = severely burdened). These are fixed — your job is only to explain and justify them in plain language, not to second-guess or restate a different number.
 
