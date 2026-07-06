@@ -80,6 +80,35 @@ surface temperature), ~50 km grid bilinearly interpolated; canopy is a static
 
 ---
 
+## Bilingual (English / Spanish)
+
+A language toggle (top-right) switches the entire interface between English and
+Spanish. The AI report card is *regenerated* in natural Texas Spanish by the
+backend (`?lang=es` on `/api/neighborhood`), and the assistance directory ships
+bilingual descriptions. The choice persists across visits. Built with San
+Antonio's ~64% Hispanic population in mind.
+
+## Embeddable widget
+
+Cities and partners can drop a compact, read-only score badge onto their own
+pages with an iframe — no API key, no build step:
+
+```html
+<iframe src="https://YOUR-DOMAIN/embed/78207"
+        width="360" height="240" style="border:0"
+        title="Sentinal environmental report"></iframe>
+```
+
+- `/embed/{zip}` renders just the grade, score, summary, and a deep link to the
+  full report — completely separate from the main app chrome.
+- Add `?lang=es` for the Spanish badge.
+- The widget posts its height to the parent (`sentinal-embed-height` message)
+  so the host can auto-size the iframe.
+- `vercel.json` lifts the strict `frame-ancestors` policy for `/embed/` only;
+  the main app keeps full clickjacking protection.
+
+---
+
 ## Project structure
 
 ```
