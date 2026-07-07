@@ -1847,15 +1847,22 @@
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 920px) {
+  /* Stack as a flex column so we can lift the map above the report — on a
+     phone the two-column grid collapses and the map would otherwise land at
+     the very bottom, past the whole report. order:-1 puts it right under the
+     search bar where it's visible without scrolling. Desktop is untouched. */
   .atlas {
-    display: block;
+    display: flex;
+    flex-direction: column;
   }
   .map-pane {
+    order: -1;
     position: relative;
     top: auto;
-    height: 420px;
+    height: 60vh;
+    max-height: 460px;
     border-left: none;
-    border-top: 1.5px solid var(--border-ink);
+    border-bottom: 1.5px solid var(--border-ink);
   }
   .report-pane {
     padding: 22px 16px 40px 40px;
