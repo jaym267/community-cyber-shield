@@ -14,5 +14,11 @@ export default defineConfig({
     // (script-src 'self', no 'unsafe-inline') in vercel.json doesn't block it.
     // Modern browsers support <link rel="modulepreload"> natively.
     modulePreload: { polyfill: false },
+    // Keep legacy CSS syntax so the minifier doesn't rewrite media queries into
+    // the modern range form `@media (width <= 920px)` — that form is ignored by
+    // Safari < 16.4 and older mobile browsers, which silently dropped ALL our
+    // responsive/mobile styles on those devices. Targeting safari14 forces the
+    // widely-supported `max-width` syntax instead.
+    cssTarget: "safari14",
   },
 })
