@@ -5,7 +5,6 @@
   ],
   "headers": [
     {
-      "comment": "Strict hardening for the app itself — everything except the embed widget, which must be iframe-able.",
       "source": "/((?!embed/).*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -17,7 +16,6 @@
       ]
     },
     {
-      "comment": "Embed widget — read-only badge cities can iframe. Framing is allowed from any origin; no X-Frame-Options (it can't express cross-origin allow).",
       "source": "/embed/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
