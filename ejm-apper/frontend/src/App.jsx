@@ -1520,6 +1520,7 @@ Respectfully,
               ) : (
                 <div className="map-skeleton">
                   <div className="skel" style={{ width: "100%", height: "100%", borderRadius: 0 }} />
+                  <span className="map-loading-label">Loading map…</span>
                 </div>
               )}
             </div>

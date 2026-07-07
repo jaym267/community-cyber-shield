@@ -13,6 +13,13 @@
       "runtimeExecutable": "ejm-apper/backend/venv/Scripts/python.exe",
       "runtimeArgs": ["-m", "uvicorn", "main:app", "--reload", "--port", "8001", "--app-dir", "ejm-apper/backend"],
       "port": 8001
+    },
+    {
+      "name": "frontend-prod-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "ejm-apper/frontend", "run", "preview", "--", "--port", "4173"],
+      "port": 4173,
+      "autoPort": false
     }
   ]
 }

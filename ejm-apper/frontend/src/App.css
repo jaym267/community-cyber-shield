@@ -402,6 +402,25 @@
   position: absolute;
   inset: 0;
 }
+/* The shimmer alone is too close to the page background to read as "loading"
+   on a slow connection — it can look identical to a broken/empty map. Label
+   it explicitly so a slow load is never mistaken for a missing one. */
+.map-loading-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border: 1px solid var(--border-ink);
+  border-radius: var(--wobble-sm);
+  padding: 8px 16px;
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 /* Map overlays */
 .map-chips {
